@@ -1,0 +1,90 @@
+# Checks only the projects affected by a change. See docs/workflows/ci.md.
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      all:
+        description: Check every project
+        type: boolean
+        default: true
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  detect:
+    name: Detect affected projects
+    runs-on: ubuntu-latest
+    outputs:
+      projects: ${{ steps.changed.outputs.projects }}
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+      - id: changed
+        run: .github/scripts/changed-projects.sh
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.before }}
+          ALL: ${{ github.event_name == 'workflow_dispatch' && inputs.all && '1' || '' }}
+
+  check:
+    name: ${{ matrix.project }}
+    needs: detect
+    if: needs.detect.outputs.projects != '[]'
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        project: ${{ fromJSON(needs.detect.outputs.projects) }}
+    defaults:
+      run:
+        working-directory: ${{ matrix.project }}
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Install toolchain (from rust-toolchain.toml)
+        run: rustup toolchain install && rustc --version
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: ${{ matrix.project }}
+
+      - name: Project ci.sh
+        if: hashFiles(format('{0}/ci.sh', matrix.project)) != ''
+        run: ./ci.sh
+
+      - name: Format
+        if: hashFiles(format('{0}/ci.sh', matrix.project)) == ''
+        run: cargo fmt --check
+
+      - name: Clippy
+        if: hashFiles(format('{0}/ci.sh', matrix.project)) == ''
+        run: cargo clippy --all-targets -- -D warnings
+
+      - name: Test
+        if: hashFiles(format('{0}/ci.sh', matrix.project)) == ''
+        run: cargo test
+
+  ci-ok:
+    # Single stable status to require in branch protection.
+    name: CI result
+    needs: [detect, check]
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - run: |
+          if [[ "${{ needs.detect.result }}" != "success" ]] || [[ "${{ needs.check.result }}" =~ ^(failure|cancelled)$ ]]; then
+            echo "CI failed"; exit 1
+          fi
+          echo "All affected projects passed (or none were affected)."

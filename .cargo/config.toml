@@ -1,0 +1,7 @@
+# Shared Cargo config (cargo searches parent directories).
+# No shared target-dir on purpose: projects have separate lockfiles, and a shared
+# target dir would make parallel builds block on each other's lock.
+
+[cargo-new]
+# The monorepo already is the git repo; never create nested repos.
+vcs = "none"

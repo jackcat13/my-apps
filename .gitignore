@@ -1,0 +1,11 @@
+# Build output of every standalone project
+target/
+
+# OS / editor
+.DS_Store
+.idea/
+.vscode/
+*.swp
+
+# Local-only agent settings
+.claude/settings.local.json

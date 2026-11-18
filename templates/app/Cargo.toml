@@ -1,0 +1,22 @@
+[package]
+name = "{{project-name}}"
+version = "0.1.0"
+edition = "2024"
+description = "{{description}}"
+publish = false
+
+[dependencies]
+
+# Standard lint block, kept in sync with docs/conventions.md. Do not weaken globally.
+[lints.rust]
+unsafe_code = "deny"
+missing_debug_implementations = "warn"
+
+[lints.clippy]
+all = { level = "warn", priority = -1 }
+pedantic = { level = "warn", priority = -1 }
+module_name_repetitions = "allow"
+missing_errors_doc = "allow"
+unwrap_used = "warn"
+dbg_macro = "warn"
+todo = "warn"

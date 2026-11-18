@@ -1,0 +1,7 @@
+# Default toolchain for every project (rustup searches parent directories).
+# A project needing something else (nightly, extra targets) adds its own rust-toolchain.toml
+# and documents why in its AGENTS.md.
+[toolchain]
+channel = "stable"
+components = ["rustfmt", "clippy"]
+profile = "minimal"

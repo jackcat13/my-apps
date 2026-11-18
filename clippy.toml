@@ -1,0 +1,5 @@
+# Shared by every project (clippy searches parent directories).
+# Lint *levels* live in each project's Cargo.toml [lints] block (copied from templates/).
+allow-unwrap-in-tests = true
+allow-expect-in-tests = true
+allow-panic-in-tests = true
