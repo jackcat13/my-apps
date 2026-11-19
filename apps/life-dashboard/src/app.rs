@@ -9,6 +9,7 @@ use poll_promise::Promise;
 use sqlx::SqlitePool;
 use tokio::runtime::Runtime;
 
+use crate::dashboard::DashboardScreen;
 use crate::db::preferences::Theme;
 use crate::db::{self, DbError, connections, preferences};
 use crate::settings::SettingsScreen;
@@ -32,8 +33,53 @@ async fn open_and_load(path: PathBuf) -> Result<Loaded, DbError> {
 
 enum State {
     Connecting(Promise<Result<Loaded, DbError>>),
-    Ready(Box<SettingsScreen>),
+    Ready(Box<Shell>),
     Failed(String),
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum Screen {
+    Dashboard,
+    Settings,
+}
+
+/// The two top-level screens, once the database is open: Dashboard (read-only, local data)
+/// and Settings (Connections + Preferences).
+struct Shell {
+    screen: Screen,
+    dashboard: DashboardScreen,
+    settings: SettingsScreen,
+}
+
+impl Shell {
+    fn new(
+        pool: SqlitePool,
+        connections: Vec<connections::Connection>,
+        preferences: preferences::Preferences,
+    ) -> Self {
+        Self {
+            screen: Screen::Dashboard,
+            dashboard: DashboardScreen::new(pool.clone()),
+            settings: SettingsScreen::new(pool, connections, preferences),
+        }
+    }
+
+    fn theme(&self) -> Theme {
+        self.settings.theme()
+    }
+
+    fn ui(&mut self, ui: &mut egui::Ui, handle: &tokio::runtime::Handle) {
+        ui.horizontal(|ui| {
+            ui.selectable_value(&mut self.screen, Screen::Dashboard, "Dashboard");
+            ui.selectable_value(&mut self.screen, Screen::Settings, "Settings");
+        });
+        ui.separator();
+
+        match self.screen {
+            Screen::Dashboard => self.dashboard.ui(ui, handle),
+            Screen::Settings => self.settings.ui(ui, handle),
+        }
+    }
 }
 
 /// The `eframe::App` implementation: a thin shell around [`SettingsScreen`] for now.
@@ -68,7 +114,7 @@ impl eframe::App for App {
     fn logic(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
         self.state = match std::mem::replace(&mut self.state, State::Failed(String::new())) {
             State::Connecting(promise) => match promise.try_take() {
-                Ok(Ok(loaded)) => State::Ready(Box::new(SettingsScreen::new(
+                Ok(Ok(loaded)) => State::Ready(Box::new(Shell::new(
                     loaded.pool,
                     loaded.connections,
                     loaded.preferences,
@@ -85,8 +131,8 @@ impl eframe::App for App {
             other => other,
         };
 
-        if let State::Ready(settings) = &self.state {
-            match settings.theme() {
+        if let State::Ready(shell) = &self.state {
+            match shell.theme() {
                 Theme::Light => ctx.set_visuals(egui::Visuals::light()),
                 Theme::Dark => ctx.set_visuals(egui::Visuals::dark()),
                 Theme::System => {}
@@ -102,7 +148,7 @@ impl eframe::App for App {
             State::Failed(message) => {
                 ui.colored_label(egui::Color32::RED, message.as_str());
             }
-            State::Ready(settings) => settings.ui(ui, self.runtime.handle()),
+            State::Ready(shell) => shell.ui(ui, self.runtime.handle()),
         });
     }
 }

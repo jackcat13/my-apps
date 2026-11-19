@@ -13,6 +13,7 @@ use tokio::runtime::Handle;
 
 use crate::db::preferences::Theme;
 use crate::db::{DbError, connections, preferences};
+use crate::sync;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum Tab {
@@ -52,6 +53,7 @@ impl ConnectionForm {
 /// The Settings screen's state: a connection pool plus whatever is in flight.
 pub struct SettingsScreen {
     pool: SqlitePool,
+    client: reqwest::Client,
     tab: Tab,
     connections: Vec<connections::Connection>,
     preferences: preferences::Preferences,
@@ -59,6 +61,7 @@ pub struct SettingsScreen {
     busy: bool,
     last_error: Option<String>,
     reload: Option<Promise<Result<Vec<connections::Connection>, DbError>>>,
+    refresh: Option<Promise<Result<Vec<connections::Connection>, String>>>,
     save_preferences: Option<Promise<Result<preferences::Preferences, DbError>>>,
 }
 
@@ -70,6 +73,7 @@ impl SettingsScreen {
     ) -> Self {
         Self {
             pool,
+            client: reqwest::Client::new(),
             tab: Tab::Connections,
             connections,
             preferences,
@@ -77,6 +81,7 @@ impl SettingsScreen {
             busy: false,
             last_error: None,
             reload: None,
+            refresh: None,
             save_preferences: None,
         }
     }
@@ -133,11 +138,25 @@ impl SettingsScreen {
                 Err(promise) => self.save_preferences = Some(promise),
             }
         }
+        if let Some(promise) = self.refresh.take() {
+            match promise.try_take() {
+                Ok(Ok(connections)) => {
+                    self.connections = connections;
+                    self.busy = false;
+                }
+                Ok(Err(message)) => self.fail_message(message),
+                Err(promise) => self.refresh = Some(promise),
+            }
+        }
     }
 
     fn fail(&mut self, err: &DbError) {
-        tracing::error!(%err, "settings operation failed");
-        self.last_error = Some(err.to_string());
+        self.fail_message(err.to_string());
+    }
+
+    fn fail_message(&mut self, message: String) {
+        tracing::error!(error = %message, "settings operation failed");
+        self.last_error = Some(message);
         self.busy = false;
     }
 
@@ -170,6 +189,24 @@ impl SettingsScreen {
         self.reload = Some(Promise::spawn_async(async move {
             connections::delete(&pool, id).await?;
             connections::list(&pool).await
+        }));
+    }
+
+    fn spawn_refresh(&mut self, handle: &Handle, id: i64) {
+        let Some(connection) = self.connections.iter().find(|c| c.id == id).cloned() else {
+            return;
+        };
+        let pool = self.pool.clone();
+        let client = self.client.clone();
+        self.busy = true;
+        let _guard = handle.enter();
+        self.refresh = Some(Promise::spawn_async(async move {
+            sync::refresh_connection(&pool, &client, &connection)
+                .await
+                .map_err(|err| err.to_string())?;
+            connections::list(&pool)
+                .await
+                .map_err(|err| err.to_string())
         }));
     }
 

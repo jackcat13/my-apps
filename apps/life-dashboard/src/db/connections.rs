@@ -108,6 +108,17 @@ pub async fn update(pool: &SqlitePool, id: i64, draft: &ConnectionDraft) -> Resu
     Ok(())
 }
 
+/// Stamps a connection as having just synced successfully.
+pub async fn mark_synced(pool: &SqlitePool, id: i64, at: Timestamp) -> Result<(), DbError> {
+    sqlx::query("UPDATE connections SET last_sync = ? WHERE id = ?")
+        .bind(at.to_string())
+        .bind(id)
+        .execute(pool)
+        .await
+        .map_err(DbError::Query)?;
+    Ok(())
+}
+
 /// Deletes a connection. Accounts that referenced it keep their history (`connection_id`
 /// is set to `NULL` by the schema's `ON DELETE SET NULL`).
 pub async fn delete(pool: &SqlitePool, id: i64) -> Result<(), DbError> {
