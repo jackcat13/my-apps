@@ -7,6 +7,9 @@ records why.
 Change this file deliberately (see the "File knowledge at the right level" rule in the root
 `AGENTS.md`) and add an ADR in `docs/adr/` if the change is significant.
 
+Choices that replace a well-known alternative are enforced: `deny.toml` bans the replaced crates
+and `clippy.toml` bans their types and macros (see `workflows/quality.md`).
+
 ## Cross-cutting
 
 | Concern | Choice | Notes |

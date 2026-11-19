@@ -14,4 +14,5 @@ stay in `docs/workflows/new-app.md`, done by the agent or by hand, not by templa
 
 ## Consequences
 - Requires `cargo-generate` installed locally.
-- Templates must be kept in sync with `docs/conventions.md` (e.g. the `[lints]` block).
+- Templates must follow `docs/conventions.md`. The `[lints]` block is synced from `lints.toml`, and
+  CI generates both templates and runs the full gate on them (0005).

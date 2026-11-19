@@ -10,5 +10,5 @@ Before generating, confirm with the user: the name, the kind, and the one-line p
 If this is the first app of its kind, also follow `docs/stacks/README.md` and agree on the stack
 with the user before writing code.
 
-Finish with the verify step (fmt, clippy, test from inside the project folder) and the registry
-row in the root `AGENTS.md`.
+Finish with the verify step (`just check <project>` from the repo root) and the registry row in
+the root `AGENTS.md`.

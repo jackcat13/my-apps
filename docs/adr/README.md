@@ -27,3 +27,4 @@ What gets easier, what gets harder, what we must keep doing.
 - [0002 — AGENTS.md as the only agent context file](0002-agents-md-only.md)
 - [0003 — cargo-generate for scaffolding](0003-cargo-generate.md)
 - [0004 — CI checks only affected projects](0004-ci-affected-projects.md)
+- [0005 — Strict, machine-enforced quality gates](0005-quality-gates.md)

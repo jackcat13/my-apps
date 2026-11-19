@@ -5,18 +5,18 @@ standalone Cargo project; the root holds shared docs, tooling config, templates 
 
 ## Requirements
 
-- Rust via `rustup` (the toolchain is selected by `rust-toolchain.toml`)
-- [`cargo-generate`](https://github.com/cargo-generate/cargo-generate): `brew install cargo-generate` or `cargo install cargo-generate`
+- Rust via `rustup` (the toolchain is pinned by `rust-toolchain.toml`)
+- [`cargo-binstall`](https://github.com/cargo-bins/cargo-binstall) and Homebrew. Then run
+  `scripts/setup.sh` once: it installs the toolchain, every pinned tool from `tools.txt` (`just`,
+  `cargo-generate`, `cargo-deny`, `cargo-nextest`, …) and the git pre-commit hook.
 - For AI agents: Claude Code ≥ 2.1.277 (reads `AGENTS.md` natively) or any agent that reads `AGENTS.md`
 
 ## Quick start
 
 ```bash
-# new application
-cargo generate --path templates/app --destination apps --name my-tool
-
-# new shared crate
-cargo generate --path templates/crate --destination crates --name my-lib
+just new app my-tool "What it does"     # new application
+just new crate my-lib "What it does"    # new shared crate
+just check apps/my-tool                  # the full quality gate, same as CI
 ```
 
 Then follow the remaining steps in [docs/workflows/new-app.md](docs/workflows/new-app.md) (registry, AGENTS.md).
@@ -25,4 +25,5 @@ Then follow the remaining steps in [docs/workflows/new-app.md](docs/workflows/ne
 
 - [AGENTS.md](AGENTS.md): rules, layout, project registry
 - [docs/](docs/): conventions, default stack, workflows, decision records
+- [docs/workflows/quality.md](docs/workflows/quality.md): every quality gate and how to make an exception
 - [.github/workflows/ci.yml](.github/workflows/ci.yml): CI checks only the projects affected by a change

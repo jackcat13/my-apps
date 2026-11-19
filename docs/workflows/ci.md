@@ -1,52 +1,55 @@
 # Workflow: CI
 
-Defined in `.github/workflows/ci.yml`. Runs on pull requests and on pushes to `main`. Checks only;
-releases and deployment are out of scope until an app needs them (documented in that app's
-`AGENTS.md`).
+Defined in `.github/workflows/ci.yml` (every PR and push to `main`) and
+`.github/workflows/scheduled.yml` (daily and weekly). The workflows only call scripts from
+`scripts/`, the same ones `just` runs locally, so a green `just check` means a green CI.
+What each check does: [quality.md](quality.md). Releases and deployment are out of scope until an
+app needs them (documented in that app's `AGENTS.md`).
+
+## Jobs
+
+- **detect**: `scripts/changed-projects.sh` lists the affected projects.
+- **repo**: `just check-repo` and `just check-templates`. Always runs.
+- **check** (matrix, one job per affected project): installs `APT_PACKAGES` from the project's
+  `ci.env`, then `just check <project>`.
+- **CI result** (`ci-ok`): sums up the others. Make it the single required status check in branch
+  protection (a GitHub setting, done by hand).
 
 ## Which projects run
 
-`.github/scripts/changed-projects.sh` builds the list:
+`scripts/changed-projects.sh` builds the list:
 
 1. The files changed since the base (PR base, or the previous `main` commit on push).
 2. Each changed file under `apps/<name>/` or `crates/<name>/` selects that project.
-3. Every project that depends (transitively) on a selected project through a
-   `path = "…"` dependency (resolved to its real folder) is selected too.
-4. A change to shared config (`rust-toolchain.toml`, `rustfmt.toml`, `clippy.toml`, `.cargo/`,
-   `.github/`) selects **every** project.
-5. Changes only to `docs/`, `templates/`, or root markdown select nothing.
+3. Every project that depends (transitively) on a selected project through a path dependency
+   (read from `cargo metadata`) is selected too.
+4. A change to shared config or tooling (`rust-toolchain.toml`, `rustfmt.toml`, `clippy.toml`,
+   `lints.toml`, `deny.toml`, `sgconfig.yml`, `tools.txt`, `justfile`, `.cargo/`, `.config/`,
+   `.github/`, `scripts/`, `lint/`) selects **every** project.
+5. Changes only to `docs/`, `templates/`, or root markdown select no project (templates are covered
+   by the repo job).
 
-Run it locally to see what CI would check:
+Locally:
 
 ```bash
-BASE_SHA=$(git merge-base origin/main HEAD) .github/scripts/changed-projects.sh
-ALL=1 .github/scripts/changed-projects.sh   # every project
+just affected                                   # vs origin/main
+ALL=1 FORMAT=lines scripts/changed-projects.sh  # every project
+LOCAL=worktree FORMAT=lines scripts/changed-projects.sh
 ```
 
-## What runs per project
+## Hardening
 
-From inside the project folder, after installing the toolchain from `rust-toolchain.toml` and
-restoring the cache:
+- Actions are pinned by commit SHA with the version in a comment; Dependabot updates them weekly.
+- `permissions: {}` at the top, `contents: read` per job; `persist-credentials: false` on checkout.
+- `actionlint` and `zizmor` lint the workflows; `shellcheck` lints the scripts.
+- Tool versions come from `tools.txt`; the toolchain from `rust-toolchain.toml`.
 
-- If the project has an executable `ci.sh`, run **only** `./ci.sh`. It replaces the defaults, so
-  it's responsible for fmt/clippy/test as well as whatever extra it needs (targets, system packages
-  through `sudo apt-get`, …).
-- Otherwise:
-  ```bash
-  cargo fmt --check
-  cargo clippy --all-targets -- -D warnings
-  cargo test
-  ```
+## Project-specific needs
 
-The `ci-ok` job sums up the matrix. Make it the single required status check in branch protection.
-
-## Typical `ci.sh`
+A project never replaces the gate. It adds to it with `ci.env` (features, extra targets, system
+packages) and `ci.sh` (extra steps). Example for a wasm app:
 
 ```bash
-#!/usr/bin/env bash
-set -euo pipefail
-rustup target add wasm32-unknown-unknown
-cargo fmt --check
-cargo clippy --all-targets --target wasm32-unknown-unknown -- -D warnings
-cargo test
+# apps/my-web-ui/ci.env
+TARGETS="wasm32-unknown-unknown"
 ```
