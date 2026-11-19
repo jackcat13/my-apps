@@ -28,14 +28,28 @@ impl ConnectorType {
             other => Self::Unknown(other.to_owned()),
         }
     }
+
+    /// Whether this connector's `credentials` field holds an actual secret, as opposed to
+    /// non-sensitive configuration (e.g. a local gateway URL). The Settings screen uses this
+    /// to decide whether to mask the field: IBKR's own gateway handles authentication via the
+    /// user's browser session, so its `credentials` is just a URL, not something to hide.
+    pub fn credentials_are_secret(&self) -> bool {
+        match self {
+            Self::InteractiveBrokers => false,
+            // Unknown to this app (either not implemented yet, or a typo) — assume the
+            // worst and mask it, rather than risk showing a real secret in the clear.
+            Self::Unknown(_) => true,
+        }
+    }
 }
 
 /// One account as reported by a connector, with its positions and recent transactions,
 /// before it's matched against (or inserted into) the local `accounts` table.
 #[derive(Debug, Clone, PartialEq)]
 pub struct FetchedAccount {
-    /// The connector's own identifier for this account (e.g. an IBKR account id), used as
-    /// the account's `name` so repeated refreshes line up with the same local row.
+    /// The connector's own identifier for this account (e.g. an IBKR account id), matched
+    /// against [`crate::db::accounts::Account::external_id`] so repeated refreshes line up
+    /// with the same local row.
     pub external_id: String,
     /// ISO 4217 currency code the account is denominated in.
     pub currency: String,
@@ -138,5 +152,15 @@ mod tests {
             ConnectorType::parse("mystery-broker"),
             ConnectorType::Unknown("mystery-broker".to_owned())
         );
+    }
+
+    #[test]
+    fn interactive_brokers_credentials_are_not_a_secret() {
+        assert!(!ConnectorType::InteractiveBrokers.credentials_are_secret());
+    }
+
+    #[test]
+    fn an_unknown_connector_type_is_treated_as_having_secret_credentials() {
+        assert!(ConnectorType::Unknown("mystery-broker".to_owned()).credentials_are_secret());
     }
 }

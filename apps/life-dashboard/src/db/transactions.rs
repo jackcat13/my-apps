@@ -2,8 +2,10 @@
 //! Unlike positions, a refresh only adds transactions that aren't already recorded, so
 //! repeated refreshes don't duplicate history.
 
+use std::future::Future;
+
 use jiff::Timestamp;
-use sqlx::SqlitePool;
+use sqlx::{Acquire, Sqlite, SqlitePool};
 
 use super::{DbError, decode_timestamp};
 
@@ -80,44 +82,66 @@ pub async fn list_for_account(
 
 /// Inserts every draft that isn't already recorded for `account_id` (same timestamp, type,
 /// amount and asset), so refreshing a connection repeatedly doesn't duplicate history.
-pub async fn insert_new_for_account(
-    pool: &SqlitePool,
+///
+/// Accepts anything [`sqlx::Acquire`] can produce a connection from: a `&SqlitePool` opens
+/// its own transaction; a `&mut sqlx::Transaction` (used by
+/// [`crate::sync::refresh_connection`]) runs as a nested savepoint inside the caller's
+/// transaction instead, so the whole refresh stays atomic (and the existence-check-then-
+/// insert for each draft can't race a concurrent refresh of the same account).
+#[expect(
+    clippy::manual_async_fn,
+    reason = "async fn sugar here triggers sqlx's known 'implementation of Acquire is not \
+              general enough' HRTB error when called from Promise::spawn_async; the explicit \
+              impl Future + Send + 'a signature is sqlx's own documented workaround"
+)]
+pub fn insert_new_for_account<'a, A>(
+    conn: A,
     account_id: i64,
-    transactions: &[TransactionDraft],
-) -> Result<(), DbError> {
-    for transaction in transactions {
-        let occurred_at = transaction.occurred_at.to_string();
-        let exists: Option<(i64,)> = sqlx::query_as(
-            "SELECT id FROM transactions \
-             WHERE account_id = ? AND occurred_at = ? AND transaction_type = ? \
-             AND amount = ? AND asset IS ?",
-        )
-        .bind(account_id)
-        .bind(&occurred_at)
-        .bind(&transaction.kind)
-        .bind(transaction.amount)
-        .bind(&transaction.asset)
-        .fetch_optional(pool)
-        .await
-        .map_err(DbError::Query)?;
-        if exists.is_some() {
-            continue;
+    transactions: &'a [TransactionDraft],
+) -> impl Future<Output = Result<(), DbError>> + Send + 'a
+where
+    A: Acquire<'a, Database = Sqlite> + Send + 'a,
+{
+    async move {
+        let mut tx = conn.begin().await.map_err(DbError::Query)?;
+
+        for transaction in transactions {
+            let occurred_at = transaction.occurred_at.to_string();
+            let exists: Option<(i64,)> = sqlx::query_as(
+                "SELECT id FROM transactions \
+                 WHERE account_id = ? AND occurred_at = ? AND transaction_type = ? \
+                 AND amount = ? AND asset IS ?",
+            )
+            .bind(account_id)
+            .bind(&occurred_at)
+            .bind(&transaction.kind)
+            .bind(transaction.amount)
+            .bind(&transaction.asset)
+            .fetch_optional(&mut *tx)
+            .await
+            .map_err(DbError::Query)?;
+            if exists.is_some() {
+                continue;
+            }
+
+            sqlx::query(
+                "INSERT INTO transactions \
+                 (account_id, occurred_at, transaction_type, amount, asset) \
+                 VALUES (?, ?, ?, ?, ?)",
+            )
+            .bind(account_id)
+            .bind(&occurred_at)
+            .bind(&transaction.kind)
+            .bind(transaction.amount)
+            .bind(&transaction.asset)
+            .execute(&mut *tx)
+            .await
+            .map_err(DbError::Query)?;
         }
 
-        sqlx::query(
-            "INSERT INTO transactions (account_id, occurred_at, transaction_type, amount, asset) \
-             VALUES (?, ?, ?, ?, ?)",
-        )
-        .bind(account_id)
-        .bind(&occurred_at)
-        .bind(&transaction.kind)
-        .bind(transaction.amount)
-        .bind(&transaction.asset)
-        .execute(pool)
-        .await
-        .map_err(DbError::Query)?;
+        tx.commit().await.map_err(DbError::Query)?;
+        Ok(())
     }
-    Ok(())
 }
 
 #[cfg(test)]
@@ -125,30 +149,12 @@ mod tests {
     use jiff::Timestamp;
 
     use super::{TransactionDraft, insert_new_for_account, list_for_account};
-    use crate::db::accounts::upsert;
-    use crate::db::connect;
-    use crate::db::connections::{self, ConnectionDraft};
+    use crate::db::test_support;
 
-    // The returned `TempDir` must be kept alive for as long as `pool` is used: dropping it
-    // deletes the underlying SQLite file out from under the open pool.
     async fn pool_with_account() -> (tempfile::TempDir, sqlx::SqlitePool, i64) {
-        let dir = tempfile::tempdir().expect("creating a temp dir cannot fail in CI");
-        let pool = connect(&dir.path().join("db.sqlite3"))
-            .await
-            .expect("connect");
-        let connection = connections::create(
-            &pool,
-            &ConnectionDraft {
-                name: "Interactive Brokers".to_owned(),
-                connector_type: "interactive-brokers".to_owned(),
-                credentials: "https://localhost:5000".to_owned(),
-            },
-        )
-        .await
-        .expect("create connection");
-        let account = upsert(&pool, connection.id, "U1234567", "USD")
-            .await
-            .expect("upsert account");
+        let (dir, pool) = test_support::pool().await;
+        let connection = test_support::connection(&pool).await;
+        let account = test_support::account(&pool, connection.id).await;
         (dir, pool, account.id)
     }
 

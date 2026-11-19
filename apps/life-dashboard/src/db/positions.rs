@@ -2,7 +2,9 @@
 //! are a point-in-time snapshot of what the connector reported, not an append-only history
 //! (see [`crate::db::snapshots`] for the historical total), so a refresh replaces the set.
 
-use sqlx::SqlitePool;
+use std::future::Future;
+
+use sqlx::{Acquire, Sqlite, SqlitePool};
 
 use super::DbError;
 
@@ -56,67 +58,65 @@ pub async fn list_for_account(
 }
 
 /// Replaces every position for `account_id` with `positions`, in one transaction.
-pub async fn replace_for_account(
-    pool: &SqlitePool,
+///
+/// Accepts anything [`sqlx::Acquire`] can produce a connection from: a `&SqlitePool` opens
+/// its own transaction; a `&mut sqlx::Transaction` (used by
+/// [`crate::sync::refresh_connection`]) runs as a nested savepoint inside the caller's
+/// transaction instead, so the whole refresh stays atomic.
+#[expect(
+    clippy::manual_async_fn,
+    reason = "async fn sugar here triggers sqlx's known 'implementation of Acquire is not \
+              general enough' HRTB error when called from Promise::spawn_async; the explicit \
+              impl Future + Send + 'a signature is sqlx's own documented workaround"
+)]
+pub fn replace_for_account<'a, A>(
+    conn: A,
     account_id: i64,
-    positions: &[PositionDraft],
-) -> Result<(), DbError> {
-    let mut tx = pool.begin().await.map_err(DbError::Query)?;
+    positions: &'a [PositionDraft],
+) -> impl Future<Output = Result<(), DbError>> + Send + 'a
+where
+    A: Acquire<'a, Database = Sqlite> + Send + 'a,
+{
+    async move {
+        let mut tx = conn.begin().await.map_err(DbError::Query)?;
 
-    sqlx::query("DELETE FROM positions WHERE account_id = ?")
-        .bind(account_id)
-        .execute(&mut *tx)
-        .await
-        .map_err(DbError::Query)?;
+        sqlx::query("DELETE FROM positions WHERE account_id = ?")
+            .bind(account_id)
+            .execute(&mut *tx)
+            .await
+            .map_err(DbError::Query)?;
 
-    for position in positions {
-        sqlx::query(
-            "INSERT INTO positions \
-             (account_id, symbol, quantity, cost_basis, current_value, native_currency) \
-             VALUES (?, ?, ?, ?, ?, ?)",
-        )
-        .bind(account_id)
-        .bind(&position.symbol)
-        .bind(position.quantity)
-        .bind(position.cost_basis)
-        .bind(position.current_value)
-        .bind(&position.native_currency)
-        .execute(&mut *tx)
-        .await
-        .map_err(DbError::Query)?;
+        for position in positions {
+            sqlx::query(
+                "INSERT INTO positions \
+                 (account_id, symbol, quantity, cost_basis, current_value, native_currency) \
+                 VALUES (?, ?, ?, ?, ?, ?)",
+            )
+            .bind(account_id)
+            .bind(&position.symbol)
+            .bind(position.quantity)
+            .bind(position.cost_basis)
+            .bind(position.current_value)
+            .bind(&position.native_currency)
+            .execute(&mut *tx)
+            .await
+            .map_err(DbError::Query)?;
+        }
+
+        tx.commit().await.map_err(DbError::Query)?;
+        Ok(())
     }
-
-    tx.commit().await.map_err(DbError::Query)?;
-    Ok(())
 }
 
 #[cfg(test)]
 mod tests {
     use super::{PositionDraft, list_for_account, replace_for_account};
-    use crate::db::accounts::upsert;
-    use crate::db::connect;
-    use crate::db::connections::{self, ConnectionDraft};
+    use crate::db::test_support;
 
-    // The returned `TempDir` must be kept alive for as long as `pool` is used: dropping it
-    // deletes the underlying SQLite file out from under the open pool.
     async fn pool_with_account() -> (tempfile::TempDir, sqlx::SqlitePool, i64) {
-        let dir = tempfile::tempdir().expect("creating a temp dir cannot fail in CI");
-        let pool = connect(&dir.path().join("db.sqlite3"))
-            .await
-            .expect("connect");
-        let connection = connections::create(
-            &pool,
-            &ConnectionDraft {
-                name: "Interactive Brokers".to_owned(),
-                connector_type: "interactive-brokers".to_owned(),
-                credentials: "https://localhost:5000".to_owned(),
-            },
-        )
-        .await
-        .expect("create connection");
-        let account = upsert(&pool, connection.id, "U1234567", "USD")
-            .await
-            .expect("upsert account");
+        let (dir, pool) = test_support::pool().await;
+        let connection = test_support::connection(&pool).await;
+        let account = test_support::account(&pool, connection.id).await;
         (dir, pool, account.id)
     }
 

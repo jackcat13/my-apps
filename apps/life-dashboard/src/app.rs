@@ -68,6 +68,15 @@ impl Shell {
         self.settings.theme()
     }
 
+    /// Resolves any in-flight background work, regardless of which screen is currently
+    /// showing. Settings' `busy` flag and error banner come from promises spawned by its own
+    /// UI (e.g. a connection refresh); those must keep resolving even while the user is
+    /// looking at the Dashboard tab, or a refresh's result/error would stay invisible and its
+    /// buttons stuck disabled until the user switches back to Settings.
+    fn poll(&mut self) {
+        self.settings.poll();
+    }
+
     fn ui(&mut self, ui: &mut egui::Ui, handle: &tokio::runtime::Handle) {
         ui.horizontal(|ui| {
             ui.selectable_value(&mut self.screen, Screen::Dashboard, "Dashboard");
@@ -131,7 +140,8 @@ impl eframe::App for App {
             other => other,
         };
 
-        if let State::Ready(shell) = &self.state {
+        if let State::Ready(shell) = &mut self.state {
+            shell.poll();
             match shell.theme() {
                 Theme::Light => ctx.set_visuals(egui::Visuals::light()),
                 Theme::Dark => ctx.set_visuals(egui::Visuals::dark()),

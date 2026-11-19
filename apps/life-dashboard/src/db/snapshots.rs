@@ -1,8 +1,10 @@
 //! CRUD for `snapshots`: a historical record of one account's total value, written on every
 //! connector refresh. Unlike positions, snapshots are append-only.
 
+use std::future::Future;
+
 use jiff::Timestamp;
-use sqlx::SqlitePool;
+use sqlx::{Acquire, Sqlite, SqlitePool};
 
 use super::{DbError, decode_timestamp};
 
@@ -43,32 +45,51 @@ impl SnapshotRow {
 }
 
 /// Records a new snapshot for `account_id`.
-pub async fn insert(
-    pool: &SqlitePool,
+///
+/// Accepts anything [`sqlx::Acquire`] can produce a connection from: a `&SqlitePool` acquires
+/// its own connection; a `&mut sqlx::Transaction` (used by
+/// [`crate::sync::refresh_connection`]) writes as part of the caller's transaction instead,
+/// so the whole refresh stays atomic.
+#[expect(
+    clippy::manual_async_fn,
+    reason = "async fn sugar here triggers sqlx's known 'implementation of Acquire is not \
+              general enough' HRTB error when called from Promise::spawn_async; the explicit \
+              impl Future + Send + 'a signature is sqlx's own documented workaround"
+)]
+pub fn insert<'a, A>(
+    conn: A,
     account_id: i64,
     taken_at: Timestamp,
     total_value: f64,
-    currency: &str,
-) -> Result<Snapshot, DbError> {
-    let id = sqlx::query(
-        "INSERT INTO snapshots (account_id, taken_at, total_value, currency) VALUES (?, ?, ?, ?)",
-    )
-    .bind(account_id)
-    .bind(taken_at.to_string())
-    .bind(total_value)
-    .bind(currency)
-    .execute(pool)
-    .await
-    .map_err(DbError::Query)?
-    .last_insert_rowid();
+    currency: &'a str,
+) -> impl Future<Output = Result<Snapshot, DbError>> + Send + 'a
+where
+    A: Acquire<'a, Database = Sqlite> + Send + 'a,
+{
+    async move {
+        let mut conn = conn.acquire().await.map_err(DbError::Query)?;
 
-    Ok(Snapshot {
-        id,
-        account_id,
-        taken_at,
-        total_value,
-        currency: currency.to_owned(),
-    })
+        let id = sqlx::query(
+            "INSERT INTO snapshots (account_id, taken_at, total_value, currency) \
+             VALUES (?, ?, ?, ?)",
+        )
+        .bind(account_id)
+        .bind(taken_at.to_string())
+        .bind(total_value)
+        .bind(currency)
+        .execute(&mut *conn)
+        .await
+        .map_err(DbError::Query)?
+        .last_insert_rowid();
+
+        Ok(Snapshot {
+            id,
+            account_id,
+            taken_at,
+            total_value,
+            currency: currency.to_owned(),
+        })
+    }
 }
 
 /// The most recently taken snapshot for `account_id`, if any.
@@ -92,30 +113,12 @@ mod tests {
     use jiff::Timestamp;
 
     use super::{insert, latest_for_account};
-    use crate::db::accounts::upsert;
-    use crate::db::connect;
-    use crate::db::connections::{self, ConnectionDraft};
+    use crate::db::test_support;
 
-    // The returned `TempDir` must be kept alive for as long as `pool` is used: dropping it
-    // deletes the underlying SQLite file out from under the open pool.
     async fn pool_with_account() -> (tempfile::TempDir, sqlx::SqlitePool, i64) {
-        let dir = tempfile::tempdir().expect("creating a temp dir cannot fail in CI");
-        let pool = connect(&dir.path().join("db.sqlite3"))
-            .await
-            .expect("connect");
-        let connection = connections::create(
-            &pool,
-            &ConnectionDraft {
-                name: "Interactive Brokers".to_owned(),
-                connector_type: "interactive-brokers".to_owned(),
-                credentials: "https://localhost:5000".to_owned(),
-            },
-        )
-        .await
-        .expect("create connection");
-        let account = upsert(&pool, connection.id, "U1234567", "USD")
-            .await
-            .expect("upsert account");
+        let (dir, pool) = test_support::pool().await;
+        let connection = test_support::connection(&pool).await;
+        let account = test_support::account(&pool, connection.id).await;
         (dir, pool, account.id)
     }
 

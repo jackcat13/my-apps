@@ -4,6 +4,7 @@ use eframe::egui;
 use tokio::runtime::Handle;
 
 use super::SettingsScreen;
+use crate::connectors::ConnectorType;
 
 pub(super) fn show(screen: &mut SettingsScreen, ui: &mut egui::Ui, handle: &Handle) {
     show_list(screen, ui, handle);
@@ -85,7 +86,8 @@ fn show_form(screen: &mut SettingsScreen, ui: &mut egui::Ui, handle: &Handle) {
     });
     ui.horizontal(|ui| {
         ui.label("Credentials");
-        ui.add(egui::TextEdit::singleline(&mut screen.form.credentials).password(true));
+        let mask = ConnectorType::parse(&screen.form.connector_type).credentials_are_secret();
+        ui.add(egui::TextEdit::singleline(&mut screen.form.credentials).password(mask));
     });
 
     ui.horizontal(|ui| {

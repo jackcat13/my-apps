@@ -13,7 +13,17 @@ use tokio::runtime::Handle;
 
 use crate::db::preferences::Theme;
 use crate::db::{DbError, connections, preferences};
-use crate::sync;
+use crate::sync::{self, SyncError};
+
+/// Everything that can go wrong refreshing a connection from this screen: either the
+/// connector/persist pipeline fails, or re-listing connections afterwards does.
+#[derive(Debug, thiserror::Error)]
+enum RefreshError {
+    #[error(transparent)]
+    Sync(#[from] SyncError),
+    #[error(transparent)]
+    Db(#[from] DbError),
+}
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum Tab {
@@ -61,7 +71,7 @@ pub struct SettingsScreen {
     busy: bool,
     last_error: Option<String>,
     reload: Option<Promise<Result<Vec<connections::Connection>, DbError>>>,
-    refresh: Option<Promise<Result<Vec<connections::Connection>, String>>>,
+    refresh: Option<Promise<Result<Vec<connections::Connection>, RefreshError>>>,
     save_preferences: Option<Promise<Result<preferences::Preferences, DbError>>>,
 }
 
@@ -92,8 +102,6 @@ impl SettingsScreen {
     }
 
     pub(crate) fn ui(&mut self, ui: &mut egui::Ui, handle: &Handle) {
-        self.poll();
-
         ui.horizontal(|ui| {
             ui.selectable_value(&mut self.tab, Tab::Connections, "Connections");
             ui.selectable_value(&mut self.tab, Tab::Preferences, "Preferences");
@@ -116,7 +124,11 @@ impl SettingsScreen {
         }
     }
 
-    fn poll(&mut self) {
+    /// Resolves any in-flight database/connector work. Called every frame regardless of
+    /// which top-level screen is showing (`App::logic`, not this screen's own `ui()`) so a
+    /// background refresh's `busy` flag and error banner don't freeze while the user is on
+    /// the Dashboard tab.
+    pub(crate) fn poll(&mut self) {
         if let Some(promise) = self.reload.take() {
             match promise.try_take() {
                 Ok(Ok(connections)) => {
@@ -144,7 +156,7 @@ impl SettingsScreen {
                     self.connections = connections;
                     self.busy = false;
                 }
-                Ok(Err(message)) => self.fail_message(message),
+                Ok(Err(err)) => self.fail_message(err.to_string()),
                 Err(promise) => self.refresh = Some(promise),
             }
         }
@@ -201,12 +213,8 @@ impl SettingsScreen {
         self.busy = true;
         let _guard = handle.enter();
         self.refresh = Some(Promise::spawn_async(async move {
-            sync::refresh_connection(&pool, &client, &connection)
-                .await
-                .map_err(|err| err.to_string())?;
-            connections::list(&pool)
-                .await
-                .map_err(|err| err.to_string())
+            sync::refresh_connection(&pool, &client, &connection).await?;
+            Ok(connections::list(&pool).await?)
         }));
     }
 

@@ -83,15 +83,26 @@ impl Connector for InteractiveBrokersConnector {
             let transactions = trades
                 .iter()
                 .filter(|trade| trade.account == account.account_id)
-                .filter_map(|trade| {
-                    let occurred_at = Timestamp::from_millisecond(trade.trade_time_r).ok()?;
-                    Some(FetchedTransaction {
-                        occurred_at,
-                        kind: trade.side.clone(),
-                        amount: trade.net_amount,
-                        asset: Some(trade.symbol.clone()),
-                    })
-                })
+                .filter_map(
+                    |trade| match Timestamp::from_millisecond(trade.trade_time_r) {
+                        Ok(occurred_at) => Some(FetchedTransaction {
+                            occurred_at,
+                            kind: trade.side.clone(),
+                            amount: trade.net_amount,
+                            asset: Some(trade.symbol.clone()),
+                        }),
+                        Err(err) => {
+                            tracing::warn!(
+                                account = %account.account_id,
+                                symbol = %trade.symbol,
+                                trade_time_r = trade.trade_time_r,
+                                %err,
+                                "dropping a trade with an unparsable timestamp",
+                            );
+                            None
+                        }
+                    },
+                )
                 .collect();
 
             fetched.push(FetchedAccount {

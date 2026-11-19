@@ -8,6 +8,8 @@ mod error;
 pub mod positions;
 pub mod preferences;
 pub mod snapshots;
+#[cfg(test)]
+pub(crate) mod test_support;
 pub mod transactions;
 
 use std::path::Path;
