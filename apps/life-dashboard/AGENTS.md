@@ -16,12 +16,19 @@ accounts. For the user only, run locally. Out of scope for now: mobile (Android)
   feature. `accesskit` pulls in `zbus`/`zvariant` for Linux AT-SPI, which `cargo deny` flags as
   unmaintained (RUSTSEC-2026-0370/0371/0372). This drops screen-reader/accessibility-tree export
   on Linux; re-enable once `accesskit` moves off the unmaintained chain.
+- `sqlx` is built without any TLS backend feature (`sqlite` + `runtime-tokio` only): SQLite is a
+  local file, so there's no connection to secure, and pulling in `tls-rustls` drags in
+  `webpki-roots` (CDLA-Permissive-2.0), which fails the licence gate for no benefit here.
 
 ## Architecture
 
-Empty shell: `main.rs` sets up tracing and calls `life_dashboard::run()`, which opens a single
-`eframe`/`egui` window (`App`) with a blank central panel. No data model or connectors yet (see
-the follow-up GitHub issues for the rest of the plan).
+`main.rs` sets up tracing and calls `life_dashboard::run()`, which resolves the per-OS data
+directory (`etcetera`), starts a background `tokio` runtime, and opens a single `eframe`/`egui`
+window (`App`). `App` opens the SQLite database (`db::connect`, migrations in `migrations/`) on
+that runtime via a `poll_promise::Promise` and, once ready, hands off to the Settings screen
+(`settings::SettingsScreen`): Connections (CRUD against `connections`) and Preferences (display
+currency + theme, persisted in the singleton `preferences` row). No connectors or account/position
+data yet (see the follow-up GitHub issues for the rest of the plan).
 
 ## Commands
 
