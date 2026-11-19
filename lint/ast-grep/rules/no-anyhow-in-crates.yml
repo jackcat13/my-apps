@@ -1,0 +1,25 @@
+id: no-anyhow-in-crates
+language: rust
+severity: error
+message: Shared crates return typed errors; `anyhow` is for binaries only.
+note: Define a `#[derive(thiserror::Error)]` enum so callers can match on it. See docs/conventions.md#errors.
+files:
+  - "crates/**/*.rs"
+ignores:
+  - "**/tests/**"
+  - "**/benches/**"
+  - "**/examples/**"
+rule:
+  any:
+    - kind: scoped_identifier
+      has:
+        field: path
+        regex: ^anyhow$
+    - kind: scoped_use_list
+      has:
+        field: path
+        regex: ^anyhow$
+    - kind: macro_invocation
+      has:
+        field: macro
+        regex: ^(anyhow|bail|ensure)$

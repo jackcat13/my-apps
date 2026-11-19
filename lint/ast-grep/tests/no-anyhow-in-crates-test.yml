@@ -1,0 +1,9 @@
+id: no-anyhow-in-crates
+valid:
+  - "use thiserror::Error;"
+  - "fn f() -> Result<(), crate::Error> { Ok(()) }"
+invalid:
+  - "use anyhow::Result;"
+  - "use anyhow::{Context, Result};"
+  - "fn f() -> anyhow::Result<()> { Ok(()) }"
+  - "fn f() -> Result<(), E> { bail!(\"no\") }"

@@ -1,0 +1,20 @@
+id: no-blocking-sleep-in-async
+language: rust
+severity: error
+message: "`std::thread::sleep` blocks the async runtime's worker thread."
+note: Use `tokio::time::sleep(..).await`. See docs/stack.md (async runtime).
+files:
+  - "apps/**/*.rs"
+  - "crates/**/*.rs"
+rule:
+  any:
+    - pattern: std::thread::sleep($$$ARGS)
+    - pattern: thread::sleep($$$ARGS)
+  inside:
+    stopBy: end
+    any:
+      - kind: async_block
+      - kind: function_item
+        has:
+          kind: function_modifiers
+          regex: async

@@ -1,0 +1,26 @@
+id: no-string-error
+language: rust
+severity: error
+message: Errors are typed, not strings.
+note: |
+  Libraries: return a `#[derive(thiserror::Error)]` enum. Binaries: `anyhow::Result` with `.context("…")`.
+  See docs/conventions.md#errors.
+files:
+  - "apps/**/*.rs"
+  - "crates/**/*.rs"
+ignores:
+  - "**/tests/**"
+  - "**/benches/**"
+rule:
+  any:
+    - pattern: Result<$T, String>
+    - pattern: Result<$T, &str>
+    - pattern: Result<$T, &'static str>
+    - pattern: Box<dyn Error>
+    - pattern: Box<dyn std::error::Error>
+    - pattern: Box<dyn Error + Send + Sync>
+    - pattern: Box<dyn std::error::Error + Send + Sync>
+    - pattern: Err(format!($$$ARGS))
+    - pattern: Err($S.to_string())
+    - pattern: Err($S.to_owned())
+    - pattern: Err(String::from($S))

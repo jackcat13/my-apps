@@ -1,0 +1,40 @@
+# Canonical lint table for every project in the repo.
+#
+# Edit only this file, then run `just sync-lints`: it copies the tables below into each project's
+# Cargo.toml (and the templates) between the "BEGIN/END shared lints" markers. CI fails when a copy
+# differs. Why a synced copy and not [workspace.lints]: docs/adr/0001-standalone-projects.md.
+#
+# Exceptions are local and explained: `#[expect(clippy::lint_name, reason = "...")]`.
+# A bare `#[allow]` is itself denied (`allow_attributes`).
+# Narrower, opt-in lints go in a crate's root file instead: see docs/workflows/quality.md.
+
+[lints.rust]
+unsafe_code = "deny"
+missing_debug_implementations = "warn"
+
+[lints.clippy]
+all = { level = "warn", priority = -1 }
+pedantic = { level = "warn", priority = -1 }
+missing_errors_doc = "allow"
+# Shipped code never panics: return Result/Option instead.
+unwrap_used = "deny"
+expect_used = "deny"
+panic = "deny"
+todo = "deny"
+unimplemented = "deny"
+unreachable = "deny"
+exit = "deny"
+mem_forget = "deny"
+# Diagnostics go through tracing; a CLI's real output goes through one module with an #[expect].
+dbg_macro = "deny"
+print_stdout = "deny"
+print_stderr = "deny"
+# Structure.
+cognitive_complexity = "deny"
+too_many_arguments = "deny"
+wildcard_imports = "deny"
+# Every unsafe block says why it is sound.
+undocumented_unsafe_blocks = "deny"
+# Suppressions are #[expect] with a reason, so stale ones fail the build.
+allow_attributes = "deny"
+allow_attributes_without_reason = "deny"

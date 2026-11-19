@@ -1,0 +1,5 @@
+# ast-grep: project rules that clippy can't express. Run with `just check-repo` (scan + rule tests).
+ruleDirs:
+  - lint/ast-grep/rules
+testConfigs:
+  - testDir: lint/ast-grep/tests
