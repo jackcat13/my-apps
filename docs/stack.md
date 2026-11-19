@@ -35,7 +35,7 @@ Details and patterns live in `docs/stacks/<kind>.md` once the first app of that 
 | CLI | `clap` (derive) |
 | Web backend | `axum` on `tokio`, `tower-http` |
 | Database | `sqlx` |
-| GUI (desktop) | `eframe`/`egui`, `tokio` + `poll-promise` for async off the UI thread, `directories` for config/data dirs |
+| GUI (desktop) | `eframe`/`egui`, `tokio` + `poll-promise` for async off the UI thread, `etcetera` for config/data dirs |
 | WASM / frontend | to decide with the first wasm app |
 | Embedded | to decide with the first embedded app |
 | Game | to decide with the first game |
