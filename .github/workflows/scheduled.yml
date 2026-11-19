@@ -1,0 +1,132 @@
+# Checks that don't need a code change to fail (new advisories) or are too slow for every PR.
+# Daily: cargo-deny on every project. Weekly (Monday): miri, fuzzing, mutation testing.
+# See docs/workflows/quality.md.
+name: Scheduled
+
+on:
+  schedule:
+    - cron: "17 4 * * *"
+    - cron: "37 5 * * 1"
+  workflow_dispatch:
+
+permissions: {}
+
+env:
+  CARGO_TERM_COLOR: always
+  WEEKLY: ${{ github.event_name == 'workflow_dispatch' || github.event.schedule == '37 5 * * 1' }}
+
+jobs:
+  advisories:
+    name: cargo-deny (all projects)
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - run: rustup toolchain install
+      - id: tools
+        run: echo "list=$(scripts/tools.sh list cargo-deny)" >> "$GITHUB_OUTPUT"
+      - uses: taiki-e/install-action@75a7c0f87bd666af3cdb75c5b9e9d03ab6044e6f # v2.90.6
+        with:
+          tool: ${{ steps.tools.outputs.list }}
+      - run: |
+          failed=0
+          for p in $(ALL=1 FORMAT=lines scripts/changed-projects.sh); do
+            echo "==> $p"
+            (cd "$p" && cargo deny --all-features check --config "$GITHUB_WORKSPACE/deny.toml") || failed=1
+          done
+          exit "$failed"
+
+  miri:
+    # Only projects that contain unsafe code (rare by policy: unsafe_code is denied).
+    name: miri (projects with unsafe)
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - if: env.WEEKLY == 'true'
+        run: |
+          projects=$(for p in $(ALL=1 FORMAT=lines scripts/changed-projects.sh); do
+            if grep -rqE '\bunsafe\b' "$p/src" 2>/dev/null; then echo "$p"; fi
+          done)
+          if [ -z "$projects" ]; then echo "no project uses unsafe"; exit 0; fi
+          rustup toolchain install nightly --component miri
+          failed=0
+          for p in $projects; do
+            echo "==> $p"
+            (cd "$p" && cargo +nightly miri test --locked --all-features) || failed=1
+          done
+          exit "$failed"
+
+  fuzz:
+    # Every project with a fuzz/ directory (cargo-fuzz), 5 minutes per target.
+    name: fuzz (projects with fuzz/)
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - id: tools
+        run: echo "list=$(scripts/tools.sh list cargo-fuzz)" >> "$GITHUB_OUTPUT"
+      - if: env.WEEKLY == 'true' && hashFiles('apps/*/fuzz/Cargo.toml', 'crates/*/fuzz/Cargo.toml') != ''
+        uses: taiki-e/install-action@75a7c0f87bd666af3cdb75c5b9e9d03ab6044e6f # v2.90.6
+        with:
+          tool: ${{ steps.tools.outputs.list }}
+      - if: env.WEEKLY == 'true' && hashFiles('apps/*/fuzz/Cargo.toml', 'crates/*/fuzz/Cargo.toml') != ''
+        run: |
+          rustup toolchain install nightly
+          failed=0
+          for f in apps/*/fuzz crates/*/fuzz; do
+            [ -f "$f/Cargo.toml" ] || continue
+            p=${f%/fuzz}
+            for target in $(cd "$p" && cargo +nightly fuzz list); do
+              echo "==> $p: $target"
+              (cd "$p" && cargo +nightly fuzz run "$target" -- -max_total_time=300) || failed=1
+            done
+          done
+          exit "$failed"
+      - if: failure()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: fuzz-artifacts
+          path: "*/*/fuzz/artifacts/"
+
+  mutants:
+    # Report only: mutation testing shows which tests don't really check behavior.
+    name: mutants (crates, report only)
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - if: env.WEEKLY == 'true'
+        run: rustup toolchain install
+      - id: tools
+        run: echo "list=$(scripts/tools.sh list cargo-mutants cargo-nextest)" >> "$GITHUB_OUTPUT"
+      - if: env.WEEKLY == 'true' && hashFiles('crates/*/Cargo.toml') != ''
+        uses: taiki-e/install-action@75a7c0f87bd666af3cdb75c5b9e9d03ab6044e6f # v2.90.6
+        with:
+          tool: ${{ steps.tools.outputs.list }}
+      - if: env.WEEKLY == 'true' && hashFiles('crates/*/Cargo.toml') != ''
+        continue-on-error: true
+        run: |
+          for p in crates/*/; do
+            [ -f "$p/Cargo.toml" ] || continue
+            echo "==> $p"
+            (cd "$p" && cargo mutants --test-tool nextest --output "$GITHUB_WORKSPACE/mutants/$(basename "$p")") || true
+          done
+      - if: env.WEEKLY == 'true' && hashFiles('crates/*/Cargo.toml') != ''
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: mutants-report
+          path: mutants/
+          if-no-files-found: ignore
