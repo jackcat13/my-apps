@@ -1,0 +1,8 @@
+id: no-blocking-sleep-in-async
+valid:
+  - "fn wait() { std::thread::sleep(DELAY); }"
+  - "async fn wait() { tokio::time::sleep(DELAY).await; }"
+invalid:
+  - "async fn wait() { std::thread::sleep(DELAY); }"
+  - "fn spawn() { let f = async { thread::sleep(DELAY); }; }"
+  - "impl S { pub async fn wait(&self) { std::thread::sleep(DELAY); } }"

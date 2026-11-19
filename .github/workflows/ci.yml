@@ -1,4 +1,4 @@
-# Checks only the projects affected by a change. See docs/workflows/ci.md.
+# Quality gate. Same scripts as local `just check`. See docs/workflows/ci.md.
 name: CI
 
 on:
@@ -16,8 +16,7 @@ concurrency:
   group: ci-${{ github.ref }}
   cancel-in-progress: true
 
-permissions:
-  contents: read
+permissions: {}
 
 env:
   CARGO_TERM_COLOR: always
@@ -26,65 +25,97 @@ jobs:
   detect:
     name: Detect affected projects
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
     outputs:
       projects: ${{ steps.changed.outputs.projects }}
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0
+          persist-credentials: false
       - id: changed
-        run: .github/scripts/changed-projects.sh
+        run: scripts/changed-projects.sh
         env:
           BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.before }}
           ALL: ${{ github.event_name == 'workflow_dispatch' && inputs.all && '1' || '' }}
+
+  repo:
+    name: Repo checks and templates
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Install toolchain (rust-toolchain.toml)
+        run: rustup toolchain install && rustc --version
+      - id: tools
+        run: echo "list=$(scripts/tools.sh list just cargo-deny cargo-nextest cargo-llvm-cov cargo-machete cargo-hack cargo-generate ast-grep typos taplo zizmor shellcheck)" >> "$GITHUB_OUTPUT"
+      - uses: taiki-e/install-action@75a7c0f87bd666af3cdb75c5b9e9d03ab6044e6f # v2.90.6
+        with:
+          tool: ${{ steps.tools.outputs.list }}
+      - name: Install actionlint (not supported by install-action)
+        run: scripts/install-actionlint.sh
+      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
+        with:
+          workspaces: |
+            target/template-check/apps/template-check-app
+            target/template-check/crates/template-check-crate
+      - run: just check-repo
+        env:
+          GH_TOKEN: ${{ github.token }}
+      - run: just check-templates
 
   check:
     name: ${{ matrix.project }}
     needs: detect
     if: needs.detect.outputs.projects != '[]'
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
     strategy:
       fail-fast: false
       matrix:
         project: ${{ fromJSON(needs.detect.outputs.projects) }}
-    defaults:
-      run:
-        working-directory: ${{ matrix.project }}
     steps:
-      - uses: actions/checkout@v5
-
-      - name: Install toolchain (from rust-toolchain.toml)
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Install toolchain (rust-toolchain.toml)
         run: rustup toolchain install && rustc --version
-
-      - uses: Swatinem/rust-cache@v2
+      - id: tools
+        run: echo "list=$(scripts/tools.sh list just cargo-deny cargo-nextest cargo-llvm-cov cargo-machete cargo-hack)" >> "$GITHUB_OUTPUT"
+      - uses: taiki-e/install-action@75a7c0f87bd666af3cdb75c5b9e9d03ab6044e6f # v2.90.6
+        with:
+          tool: ${{ steps.tools.outputs.list }}
+      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
         with:
           workspaces: ${{ matrix.project }}
-
-      - name: Project ci.sh
-        if: hashFiles(format('{0}/ci.sh', matrix.project)) != ''
-        run: ./ci.sh
-
-      - name: Format
-        if: hashFiles(format('{0}/ci.sh', matrix.project)) == ''
-        run: cargo fmt --check
-
-      - name: Clippy
-        if: hashFiles(format('{0}/ci.sh', matrix.project)) == ''
-        run: cargo clippy --all-targets -- -D warnings
-
-      - name: Test
-        if: hashFiles(format('{0}/ci.sh', matrix.project)) == ''
-        run: cargo test
+      - name: System packages (ci.env APT_PACKAGES)
+        run: |
+          read -ra pkgs <<< "$(bash -c 'APT_PACKAGES=; [ -f ci.env ] && . ./ci.env; echo "$APT_PACKAGES"')"
+          if [ "${#pkgs[@]}" -gt 0 ]; then sudo apt-get update && sudo apt-get install -y --no-install-recommends "${pkgs[@]}"; fi
+        working-directory: ${{ matrix.project }}
+      - run: just check "$PROJECT"
+        env:
+          PROJECT: ${{ matrix.project }}
 
   ci-ok:
     # Single stable status to require in branch protection.
     name: CI result
-    needs: [detect, check]
+    needs: [detect, repo, check]
     if: always()
     runs-on: ubuntu-latest
+    permissions: {}
     steps:
-      - run: |
-          if [[ "${{ needs.detect.result }}" != "success" ]] || [[ "${{ needs.check.result }}" =~ ^(failure|cancelled)$ ]]; then
+      - env:
+          DETECT: ${{ needs.detect.result }}
+          REPO: ${{ needs.repo.result }}
+          CHECK: ${{ needs.check.result }}
+        run: |
+          if [ "$DETECT" != success ] || [ "$REPO" != success ] || [[ "$CHECK" =~ ^(failure|cancelled)$ ]]; then
             echo "CI failed"; exit 1
           fi
-          echo "All affected projects passed (or none were affected)."
+          echo "All checks passed."

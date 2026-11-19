@@ -22,9 +22,16 @@ and `docs/` apply too; this file only adds what's specific to this app.
 ## Commands
 
 ```bash
-cargo run
-cargo test
+cargo run                        # from apps/{{project-name}}/
+just check apps/{{project-name}}  # from the repo root: the full gate, what CI runs
 ```
+
+## Quality settings
+
+- `ci.env`: none (defaults: `--all-features`, no extra targets, no system packages)
+- `ci.sh`: none
+- Opt-in crate-root lints (`indexing_slicing`, `arithmetic_side_effects`): none. Required if this
+  app parses untrusted input (docs/workflows/quality.md).
 
 ## Notes and pitfalls
 

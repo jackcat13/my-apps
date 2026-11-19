@@ -1,0 +1,7 @@
+# TOML formatting (`taplo fmt`), checked by `just check-repo`.
+exclude = ["**/target/**"]
+
+[formatting]
+column_width = 100
+array_auto_collapse = false
+indent_string = "    "

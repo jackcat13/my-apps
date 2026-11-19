@@ -1,0 +1,11 @@
+id: no-string-error
+valid:
+  - "fn parse(s: &str) -> Result<u32, ParseError> { s.parse().map_err(ParseError::from) }"
+  - "fn f() -> Result<String, Error> { Ok(String::new()) }"
+  - "fn f() -> anyhow::Result<()> { Ok(()) }"
+invalid:
+  - "fn f() -> Result<(), String> { Ok(()) }"
+  - "fn f() -> Result<u8, &'static str> { Ok(1) }"
+  - "fn f() -> Result<(), Box<dyn std::error::Error>> { Ok(()) }"
+  - "fn f(x: u8) -> Result<(), E> { Err(format!(\"bad {x}\")) }"
+  - "fn f() -> Result<(), E> { Err(\"bad\".to_string()) }"

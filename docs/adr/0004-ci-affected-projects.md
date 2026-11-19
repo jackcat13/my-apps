@@ -15,5 +15,5 @@ when it has one.
 
 ## Consequences
 - Fast CI that still catches breakage spreading from shared crates.
-- Dependency detection relies on path dependencies, resolved to their folder.
-- Unusual projects take responsibility for their own checks through `ci.sh`.
+- Dependency detection relies on path dependencies, read from `cargo metadata`.
+- Unusual projects add to the standard gate through `ci.env`/`ci.sh`; they can't replace it (0005).

@@ -1,0 +1,42 @@
+id: no-string-error
+language: rust
+severity: error
+message: Errors are typed, not strings.
+note: |
+  Libraries: return a `#[derive(thiserror::Error)]` enum. Binaries: `anyhow::Result` with `.context("…")`.
+  See docs/conventions.md#errors.
+files:
+  - "apps/**/*.rs"
+  - "crates/**/*.rs"
+ignores:
+  - "**/tests/**"
+  - "**/benches/**"
+# Type patterns don't parse as a bare snippet (ast-grep reads it as an expression),
+# so each one sits in a `type` alias and `selector` picks the type node.
+rule:
+  any:
+    - pattern:
+        context: "type X = Result<$T, String>;"
+        selector: generic_type
+    - pattern:
+        context: "type X = Result<$T, &str>;"
+        selector: generic_type
+    - pattern:
+        context: "type X = Result<$T, &'static str>;"
+        selector: generic_type
+    - pattern:
+        context: "type X = Box<dyn Error>;"
+        selector: generic_type
+    - pattern:
+        context: "type X = Box<dyn std::error::Error>;"
+        selector: generic_type
+    - pattern:
+        context: "type X = Box<dyn Error + Send + Sync>;"
+        selector: generic_type
+    - pattern:
+        context: "type X = Box<dyn std::error::Error + Send + Sync>;"
+        selector: generic_type
+    - pattern: Err(format!($$$ARGS))
+    - pattern: Err($S.to_string())
+    - pattern: Err($S.to_owned())
+    - pattern: Err(String::from($S))

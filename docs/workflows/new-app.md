@@ -14,26 +14,25 @@ Always follow these steps. Never create a project with `cargo new` or by hand.
 From the repo root:
 
 ```bash
-# application
-cargo generate --path templates/app --destination apps --name <name> \
-  --define description="<one-line purpose>"
-
-# shared library crate
-cargo generate --path templates/crate --destination crates --name <name> \
-  --define description="<one-line purpose>"
+just new app <name> "<one-line purpose>"     # application in apps/
+just new crate <name> "<one-line purpose>"   # shared library crate in crates/
 ```
 
-If a kind-specific template exists (`templates/<kind>/`), use it instead of `templates/app`.
+This runs `cargo generate` on `templates/app` or `templates/crate`, syncs `lints.toml` into the new
+`Cargo.toml`, and creates `Cargo.lock`. For a kind-specific template (`templates/<kind>/`), set
+`TEMPLATE=<kind>` in front of the app command.
 
-The templates already contain the standard `[lints]` block, `AGENTS.md`, and `README.md`. They don't
-create a nested git repo.
+The templates already follow every rule: thin `main.rs` + `lib.rs` with `tracing` and `anyhow`
+(apps), a `thiserror` error type and `#![deny(missing_docs)]` (crates), `AGENTS.md`, `README.md`.
 
 ## 3. Fill in the context
 
-- In `<path>/AGENTS.md`, fill the *Purpose*, *Stack* and *Notes* sections. Delete placeholder
-  lines you have no content for.
-- Add the dependencies the app needs, preferring `docs/stack.md` (`cargo add <crate>` from inside
-  the project folder).
+- In `<path>/AGENTS.md`, fill the *Purpose*, *Stack*, *Quality settings* and *Notes* sections.
+  Delete placeholder lines you have no content for.
+- Add dependencies from inside the project folder with `cargo add <crate>`, preferring
+  `docs/stack.md`.
+- Parses untrusted input? Add the opt-in lints and a fuzz target (`docs/workflows/quality.md`).
+- Needs extra targets, features or system packages in CI? Add a `ci.env`.
 
 ## 4. Register
 
@@ -42,19 +41,14 @@ Add a row to the **Registry** table in the root `AGENTS.md`:
 
 ## 5. Verify
 
-From inside the project folder:
-
 ```bash
-cargo fmt --check && cargo clippy --all-targets -- -D warnings && cargo test
+just check apps/<name>    # or crates/<name>
 ```
-
-If the project needs non-default CI (extra targets, system libraries, nightly), add an executable
-`ci.sh` in the project folder (see `docs/workflows/ci.md`).
 
 ## Extracting a shared crate (rule of two)
 
-1. Generate the crate in `crates/` (step 2).
-2. Move the code, give it a typed error (`thiserror`) and doc comments.
+1. Generate the crate (step 2).
+2. Move the code, give it a typed error (`thiserror`) and doc comments. Reach 80 % coverage.
 3. In each app: `<crate> = { path = "../../crates/<crate>" }`, remove the duplicated code.
 4. Register the crate. Mention it in each consuming app's `AGENTS.md`.
 5. CI rechecks every app that depends on the crate automatically.

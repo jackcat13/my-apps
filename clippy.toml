@@ -1,5 +1,26 @@
-# Shared by every project (clippy searches parent directories).
-# Lint *levels* live in each project's Cargo.toml [lints] block (copied from templates/).
+# Shared by every project (clippy searches parent directories). Lint *levels* live in lints.toml.
+# A project-level clippy.toml REPLACES this file instead of extending it: start from a copy and
+# say why in the project's AGENTS.md.
+
+# Tests may panic: that's how they fail.
 allow-unwrap-in-tests = true
 allow-expect-in-tests = true
 allow-panic-in-tests = true
+allow-indexing-slicing-in-tests = true
+allow-print-in-tests = true
+allow-dbg-in-tests = true
+
+cognitive-complexity-threshold = 30
+
+# Stack choices from docs/stack.md. Every entry says what to use instead.
+disallowed-macros = [
+    { path = "log::trace", reason = "use tracing::trace (docs/stack.md)", allow-invalid = true },
+    { path = "log::debug", reason = "use tracing::debug (docs/stack.md)", allow-invalid = true },
+    { path = "log::info", reason = "use tracing::info (docs/stack.md)", allow-invalid = true },
+    { path = "log::warn", reason = "use tracing::warn (docs/stack.md)", allow-invalid = true },
+    { path = "log::error", reason = "use tracing::error (docs/stack.md)", allow-invalid = true },
+]
+disallowed-types = [
+    { path = "chrono::DateTime", reason = "use jiff (docs/stack.md)", allow-invalid = true },
+    { path = "chrono::NaiveDateTime", reason = "use jiff (docs/stack.md)", allow-invalid = true },
+]
