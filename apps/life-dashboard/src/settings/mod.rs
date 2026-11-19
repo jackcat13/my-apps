@@ -151,7 +151,11 @@ impl SettingsScreen {
     /// which top-level screen is showing (`App::logic`, not this screen's own `ui()`) so a
     /// background refresh's `busy` flag and error banner don't freeze while the user is on
     /// the Dashboard tab.
-    pub(crate) fn poll(&mut self) {
+    /// Resolves any in-flight promise, returning whether a connection refresh just finished
+    /// successfully — the signal the Dashboard screen uses to know its locally cached data is
+    /// now stale and needs reloading.
+    pub(crate) fn poll(&mut self) -> bool {
+        let mut refreshed = false;
         if let Some(promise) = self.reload.take() {
             match promise.try_take() {
                 Ok(Ok(connections)) => {
@@ -178,11 +182,13 @@ impl SettingsScreen {
                 Ok(Ok(connections)) => {
                     self.connections = connections;
                     self.busy = false;
+                    refreshed = true;
                 }
                 Ok(Err(err)) => self.fail_message(err.to_string()),
                 Err(promise) => self.refresh = Some(promise),
             }
         }
+        refreshed
     }
 
     fn fail(&mut self, err: &DbError) {
