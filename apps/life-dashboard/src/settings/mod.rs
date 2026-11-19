@@ -31,12 +31,24 @@ enum Tab {
     Preferences,
 }
 
-#[derive(Default)]
 struct ConnectionForm {
     editing_id: Option<i64>,
     name: String,
     connector_type: String,
     credentials: String,
+}
+
+impl Default for ConnectionForm {
+    fn default() -> Self {
+        Self {
+            editing_id: None,
+            name: String::new(),
+            connector_type: crate::connectors::ConnectorType::KNOWN[0]
+                .as_str()
+                .to_owned(),
+            credentials: String::new(),
+        }
+    }
 }
 
 impl ConnectionForm {
