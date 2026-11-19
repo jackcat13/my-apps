@@ -97,7 +97,13 @@ impl SettingsScreen {
     ) -> Self {
         Self {
             pool,
-            client: reqwest::Client::new(),
+            // Connectors so far only talk to locally running gateways (e.g. IBKR's Client
+            // Portal Gateway) that present a self-signed certificate; a strict client would
+            // fail every request to them with a TLS handshake error.
+            client: reqwest::Client::builder()
+                .danger_accept_invalid_certs(true)
+                .build()
+                .unwrap_or_else(|_| reqwest::Client::new()),
             tab: Tab::Connections,
             connections,
             preferences,
