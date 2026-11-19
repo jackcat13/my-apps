@@ -1,8 +1,11 @@
 //! Personal finance/stats dashboard
 
 mod app;
+mod connectors;
+mod dashboard;
 mod db;
 mod settings;
+mod sync;
 
 use std::path::PathBuf;
 

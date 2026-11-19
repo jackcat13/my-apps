@@ -1,7 +1,9 @@
 //! CRUD for `connections`: one row per institution the Settings screen lets the user manage.
 
+use std::future::Future;
+
 use jiff::Timestamp;
-use sqlx::SqlitePool;
+use sqlx::{Acquire, Sqlite, SqlitePool};
 
 use super::{DbError, decode_timestamp};
 
@@ -106,6 +108,38 @@ pub async fn update(pool: &SqlitePool, id: i64, draft: &ConnectionDraft) -> Resu
     .await
     .map_err(DbError::Query)?;
     Ok(())
+}
+
+/// Stamps a connection as having just synced successfully.
+///
+/// Accepts anything [`sqlx::Acquire`] can produce a connection from: a `&SqlitePool` acquires
+/// its own connection; a `&mut sqlx::Transaction` (used by
+/// [`crate::sync::refresh_connection`]) writes as part of the caller's transaction instead,
+/// so the whole refresh stays atomic.
+#[expect(
+    clippy::manual_async_fn,
+    reason = "async fn sugar here triggers sqlx's known 'implementation of Acquire is not \
+              general enough' HRTB error when called from Promise::spawn_async; the explicit \
+              impl Future + Send + 'a signature is sqlx's own documented workaround"
+)]
+pub fn mark_synced<'a, A>(
+    conn: A,
+    id: i64,
+    at: Timestamp,
+) -> impl Future<Output = Result<(), DbError>> + Send + 'a
+where
+    A: Acquire<'a, Database = Sqlite> + Send + 'a,
+{
+    async move {
+        let mut conn = conn.acquire().await.map_err(DbError::Query)?;
+        sqlx::query("UPDATE connections SET last_sync = ? WHERE id = ?")
+            .bind(at.to_string())
+            .bind(id)
+            .execute(&mut *conn)
+            .await
+            .map_err(DbError::Query)?;
+        Ok(())
+    }
 }
 
 /// Deletes a connection. Accounts that referenced it keep their history (`connection_id`

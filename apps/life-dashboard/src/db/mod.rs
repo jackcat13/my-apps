@@ -2,9 +2,15 @@
 //! small repository function per table. All functions take `&SqlitePool` and return
 //! [`DbError`] so callers (the UI layer) can match on failure kinds.
 
+pub mod accounts;
 pub mod connections;
 mod error;
+pub mod positions;
 pub mod preferences;
+pub mod snapshots;
+#[cfg(test)]
+pub(crate) mod test_support;
+pub mod transactions;
 
 use std::path::Path;
 

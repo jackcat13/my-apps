@@ -4,6 +4,7 @@ use eframe::egui;
 use tokio::runtime::Handle;
 
 use super::SettingsScreen;
+use crate::connectors::ConnectorType;
 
 pub(super) fn show(screen: &mut SettingsScreen, ui: &mut egui::Ui, handle: &Handle) {
     show_list(screen, ui, handle);
@@ -19,6 +20,7 @@ fn show_list(screen: &mut SettingsScreen, ui: &mut egui::Ui, handle: &Handle) {
 
     let mut edit_clicked = None;
     let mut delete_clicked = None;
+    let mut refresh_clicked = None;
 
     egui::Grid::new("connections_grid")
         .num_columns(4)
@@ -38,6 +40,12 @@ fn show_list(screen: &mut SettingsScreen, ui: &mut egui::Ui, handle: &Handle) {
                     .map_or_else(|| "never".to_owned(), |at| at.to_string());
                 ui.label(last_sync);
                 ui.horizontal(|ui| {
+                    if ui
+                        .add_enabled(!screen.busy, egui::Button::new("Refresh"))
+                        .clicked()
+                    {
+                        refresh_clicked = Some(connection.id);
+                    }
                     if ui.button("Edit").clicked() {
                         edit_clicked = Some(connection.clone());
                     }
@@ -54,6 +62,9 @@ fn show_list(screen: &mut SettingsScreen, ui: &mut egui::Ui, handle: &Handle) {
     }
     if let Some(id) = delete_clicked {
         screen.spawn_delete(handle, id);
+    }
+    if let Some(id) = refresh_clicked {
+        screen.spawn_refresh(handle, id);
     }
 }
 
@@ -75,7 +86,8 @@ fn show_form(screen: &mut SettingsScreen, ui: &mut egui::Ui, handle: &Handle) {
     });
     ui.horizontal(|ui| {
         ui.label("Credentials");
-        ui.add(egui::TextEdit::singleline(&mut screen.form.credentials).password(true));
+        let mask = ConnectorType::parse(&screen.form.connector_type).credentials_are_secret();
+        ui.add(egui::TextEdit::singleline(&mut screen.form.credentials).password(mask));
     });
 
     ui.horizontal(|ui| {
