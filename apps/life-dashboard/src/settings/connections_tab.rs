@@ -93,11 +93,17 @@ fn show_form(screen: &mut SettingsScreen, ui: &mut egui::Ui, handle: &Handle) {
                         .clicked()
                     {
                         known.as_str().clone_into(&mut screen.form.connector_type);
+                        if screen.form.credentials.is_empty()
+                            && let Some(default) = known.default_credentials()
+                        {
+                            default.clone_into(&mut screen.form.credentials);
+                        }
                     }
                 }
             })
             .response
             .on_hover_text(selected.setup_help());
+        ui.label("ⓘ").on_hover_text(selected.setup_help());
     });
     ui.horizontal(|ui| {
         ui.label("Credentials");

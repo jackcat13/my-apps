@@ -40,13 +40,15 @@ struct ConnectionForm {
 
 impl Default for ConnectionForm {
     fn default() -> Self {
+        let connector_type = &crate::connectors::ConnectorType::KNOWN[0];
         Self {
             editing_id: None,
             name: String::new(),
-            connector_type: crate::connectors::ConnectorType::KNOWN[0]
-                .as_str()
+            connector_type: connector_type.as_str().to_owned(),
+            credentials: connector_type
+                .default_credentials()
+                .unwrap_or_default()
                 .to_owned(),
-            credentials: String::new(),
         }
     }
 }

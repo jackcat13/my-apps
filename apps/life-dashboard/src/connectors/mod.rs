@@ -76,6 +76,16 @@ impl ConnectorType {
             Self::Unknown(_) => "Not a connector this app implements yet.",
         }
     }
+
+    /// The credentials value to prefill when this connector type is picked and the field is
+    /// still empty, for connectors whose "credentials" is really just a well-known default
+    /// (e.g. IBKR's local gateway URL) rather than a secret the user must supply themselves.
+    pub fn default_credentials(&self) -> Option<&str> {
+        match self {
+            Self::InteractiveBrokers => Some("https://localhost:5000/v1/api"),
+            Self::Unknown(_) => None,
+        }
+    }
 }
 
 /// One account as reported by a connector, with its positions and recent transactions,
