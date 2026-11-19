@@ -7,7 +7,7 @@ use jiff::Timestamp;
 use sqlx::SqlitePool;
 
 use crate::connectors::interactive_brokers::InteractiveBrokersConnector;
-use crate::connectors::{Connector, ConnectorError, FetchedAccount};
+use crate::connectors::{Connector, ConnectorError, ConnectorType, FetchedAccount};
 use crate::db::connections::Connection;
 use crate::db::{DbError, accounts, connections, positions, snapshots, transactions};
 
@@ -35,16 +35,14 @@ pub async fn refresh_connection(
     client: &reqwest::Client,
     connection: &Connection,
 ) -> Result<(), SyncError> {
-    let fetched = match connection.connector_type.as_str() {
-        "interactive-brokers" => {
+    let fetched = match ConnectorType::parse(&connection.connector_type) {
+        ConnectorType::InteractiveBrokers => {
             InteractiveBrokersConnector
                 .fetch(client, connection)
                 .await?
         }
-        other => {
-            return Err(SyncError::UnknownConnector {
-                connector_type: other.to_owned(),
-            });
+        ConnectorType::Unknown(connector_type) => {
+            return Err(SyncError::UnknownConnector { connector_type });
         }
     };
 

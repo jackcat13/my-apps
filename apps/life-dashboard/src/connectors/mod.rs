@@ -9,6 +9,27 @@ use jiff::Timestamp;
 
 use crate::db::connections::Connection;
 
+/// Which connector a connection's `connector_type` string names. Parsed once at the top of
+/// [`crate::sync::refresh_connection`] so the match that picks a connector is exhaustive over
+/// every connector that exists, instead of comparing strings ad hoc.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum ConnectorType {
+    /// `interactive_brokers::InteractiveBrokersConnector`.
+    InteractiveBrokers,
+    /// A `connector_type` value that doesn't match any known connector.
+    Unknown(String),
+}
+
+impl ConnectorType {
+    /// Parses a connection's `connector_type` field.
+    pub fn parse(raw: &str) -> Self {
+        match raw {
+            "interactive-brokers" => Self::InteractiveBrokers,
+            other => Self::Unknown(other.to_owned()),
+        }
+    }
+}
+
 /// One account as reported by a connector, with its positions and recent transactions,
 /// before it's matched against (or inserted into) the local `accounts` table.
 #[derive(Debug, Clone, PartialEq)]
@@ -97,4 +118,25 @@ pub trait Connector {
         client: &reqwest::Client,
         connection: &Connection,
     ) -> impl Future<Output = Result<Vec<FetchedAccount>, ConnectorError>> + Send;
+}
+
+#[cfg(test)]
+mod tests {
+    use super::ConnectorType;
+
+    #[test]
+    fn parses_the_known_connector_type() {
+        assert_eq!(
+            ConnectorType::parse("interactive-brokers"),
+            ConnectorType::InteractiveBrokers
+        );
+    }
+
+    #[test]
+    fn an_unrecognized_connector_type_is_unknown() {
+        assert_eq!(
+            ConnectorType::parse("mystery-broker"),
+            ConnectorType::Unknown("mystery-broker".to_owned())
+        );
+    }
 }
