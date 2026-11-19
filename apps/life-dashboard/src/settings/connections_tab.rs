@@ -82,7 +82,19 @@ fn show_form(screen: &mut SettingsScreen, ui: &mut egui::Ui, handle: &Handle) {
     });
     ui.horizontal(|ui| {
         ui.label("Type");
-        ui.text_edit_singleline(&mut screen.form.connector_type);
+        let selected = ConnectorType::parse(&screen.form.connector_type);
+        egui::ComboBox::from_id_salt("connector_type")
+            .selected_text(selected.label())
+            .show_ui(ui, |ui| {
+                for known in ConnectorType::KNOWN {
+                    if ui
+                        .selectable_label(selected == *known, known.label())
+                        .clicked()
+                    {
+                        known.as_str().clone_into(&mut screen.form.connector_type);
+                    }
+                }
+            });
     });
     ui.horizontal(|ui| {
         ui.label("Credentials");

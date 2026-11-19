@@ -21,11 +21,33 @@ pub enum ConnectorType {
 }
 
 impl ConnectorType {
+    /// Every connector this app implements, for populating a selection list. Does not include
+    /// [`Self::Unknown`], which only arises from parsing a string that doesn't match one of
+    /// these.
+    pub const KNOWN: &'static [ConnectorType] = &[Self::InteractiveBrokers];
+
     /// Parses a connection's `connector_type` field.
     pub fn parse(raw: &str) -> Self {
         match raw {
             "interactive-brokers" => Self::InteractiveBrokers,
             other => Self::Unknown(other.to_owned()),
+        }
+    }
+
+    /// The raw `connector_type` string this variant parses back from, i.e. the inverse of
+    /// [`Self::parse`].
+    pub fn as_str(&self) -> &str {
+        match self {
+            Self::InteractiveBrokers => "interactive-brokers",
+            Self::Unknown(raw) => raw,
+        }
+    }
+
+    /// A human-readable label for this connector, for display in the GUI.
+    pub fn label(&self) -> &str {
+        match self {
+            Self::InteractiveBrokers => "Interactive Brokers",
+            Self::Unknown(raw) => raw,
         }
     }
 
