@@ -1,4 +1,5 @@
-# Every tool the checks use, pinned. CI installs <name>@<version> (taiki-e/install-action);
+# Every tool the checks use, pinned. CI installs <name>@<version> (taiki-e/install-action;
+# actionlint via scripts/install-actionlint.sh);
 # `just setup` installs them locally from the third column. Bump versions here only.
 # name          version   local install
 just            1.59.0    binstall:just

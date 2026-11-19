@@ -52,10 +52,12 @@ jobs:
       - name: Install toolchain (rust-toolchain.toml)
         run: rustup toolchain install && rustc --version
       - id: tools
-        run: echo "list=$(scripts/tools.sh list just cargo-deny cargo-nextest cargo-llvm-cov cargo-machete cargo-hack cargo-generate ast-grep typos taplo zizmor actionlint shellcheck)" >> "$GITHUB_OUTPUT"
+        run: echo "list=$(scripts/tools.sh list just cargo-deny cargo-nextest cargo-llvm-cov cargo-machete cargo-hack cargo-generate ast-grep typos taplo zizmor shellcheck)" >> "$GITHUB_OUTPUT"
       - uses: taiki-e/install-action@75a7c0f87bd666af3cdb75c5b9e9d03ab6044e6f # v2.90.6
         with:
           tool: ${{ steps.tools.outputs.list }}
+      - name: Install actionlint (not supported by install-action)
+        run: scripts/install-actionlint.sh
       - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
         with:
           workspaces: |
