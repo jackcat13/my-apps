@@ -63,6 +63,19 @@ impl ConnectorType {
             Self::Unknown(_) => true,
         }
     }
+
+    /// A short explanation of what setting up this connector requires, for display as a
+    /// tooltip next to the type selector on the Settings screen.
+    pub fn setup_help(&self) -> &str {
+        match self {
+            Self::InteractiveBrokers => {
+                "Requires IBKR's Client Portal Gateway running locally and logged in via \
+                 your browser. Enter its base URL as the credentials, e.g. \
+                 https://localhost:5000/v1/api"
+            }
+            Self::Unknown(_) => "Not a connector this app implements yet.",
+        }
+    }
 }
 
 /// One account as reported by a connector, with its positions and recent transactions,
