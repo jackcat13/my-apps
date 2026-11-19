@@ -87,6 +87,13 @@ impl DashboardScreen {
         }
     }
 
+    /// Marks the currently loaded data as stale, so the next time this screen is shown it
+    /// reloads from the database instead of keeping what it fetched last. Used when a
+    /// connection refresh in Settings has written new accounts/positions/snapshots.
+    pub(crate) fn invalidate(&mut self) {
+        self.loaded_once = false;
+    }
+
     fn poll(&mut self) {
         let Some(promise) = self.load.take() else {
             return;

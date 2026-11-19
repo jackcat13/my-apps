@@ -72,9 +72,13 @@ impl Shell {
     /// showing. Settings' `busy` flag and error banner come from promises spawned by its own
     /// UI (e.g. a connection refresh); those must keep resolving even while the user is
     /// looking at the Dashboard tab, or a refresh's result/error would stay invisible and its
-    /// buttons stuck disabled until the user switches back to Settings.
+    /// buttons stuck disabled until the user switches back to Settings. A completed refresh
+    /// also invalidates the Dashboard's cached data, so switching to it shows the new numbers
+    /// instead of what was on disk before the refresh.
     fn poll(&mut self) {
-        self.settings.poll();
+        if self.settings.poll() {
+            self.dashboard.invalidate();
+        }
     }
 
     fn ui(&mut self, ui: &mut egui::Ui, handle: &tokio::runtime::Handle) {

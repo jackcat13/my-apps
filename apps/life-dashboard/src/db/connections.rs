@@ -142,8 +142,8 @@ where
     }
 }
 
-/// Deletes a connection. Accounts that referenced it keep their history (`connection_id`
-/// is set to `NULL` by the schema's `ON DELETE SET NULL`).
+/// Deletes a connection and every account that referenced it, cascading further to their
+/// positions, snapshots and transactions (`ON DELETE CASCADE` all the way down).
 pub async fn delete(pool: &SqlitePool, id: i64) -> Result<(), DbError> {
     sqlx::query("DELETE FROM connections WHERE id = ?")
         .bind(id)
@@ -156,7 +156,7 @@ pub async fn delete(pool: &SqlitePool, id: i64) -> Result<(), DbError> {
 #[cfg(test)]
 mod tests {
     use super::{ConnectionDraft, create, delete, list, update};
-    use crate::db::connect;
+    use crate::db::{accounts, connect};
 
     fn draft(name: &str) -> ConnectionDraft {
         ConnectionDraft {
@@ -214,5 +214,26 @@ mod tests {
         delete(&pool, created.id).await.expect("delete");
 
         assert_eq!(list(&pool).await.expect("list"), Vec::new());
+    }
+
+    #[tokio::test]
+    async fn deleting_a_connection_cascades_to_its_accounts() {
+        let dir = tempfile::tempdir().expect("creating a temp dir cannot fail in CI");
+        let pool = connect(&dir.path().join("db.sqlite3"))
+            .await
+            .expect("connect");
+        let created = create(&pool, &draft("Interactive Brokers"))
+            .await
+            .expect("create");
+        accounts::upsert(&pool, created.id, "U123", "EUR")
+            .await
+            .expect("upsert account");
+
+        delete(&pool, created.id).await.expect("delete");
+
+        assert_eq!(
+            accounts::list(&pool).await.expect("list accounts"),
+            Vec::new()
+        );
     }
 }
