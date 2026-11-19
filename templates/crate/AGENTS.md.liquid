@@ -11,6 +11,17 @@ Shared library crate in `crates/{{project-name}}/`. The shared rules in the root
 
 <!-- Apps depending on this crate. Keep in sync; changes here are re-checked in all of them by CI. -->
 
+## Commands
+
+```bash
+just check crates/{{project-name}}  # from the repo root: the full gate (coverage floor 80%)
+```
+
+## Quality settings
+
+- Opt-in crate-root lints (`indexing_slicing`, `arithmetic_side_effects`): none. Required if this
+  crate parses untrusted input (docs/workflows/quality.md).
+
 ## API notes
 
 <!-- Stability expectations, main types, feature flags. Keep dependencies minimal. -->

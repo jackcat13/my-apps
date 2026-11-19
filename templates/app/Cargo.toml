@@ -2,12 +2,21 @@
 name = "{{project-name}}"
 version = "0.1.0"
 edition = "2024"
+rust-version = "1.100"
 description = "{{description}}"
 publish = false
 
 [dependencies]
+anyhow = "1"
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 
-# Standard lint block, kept in sync with docs/conventions.md. Do not weaken globally.
+# Recommended default. Profiles are per app: tune them to this app's needs.
+[profile.release]
+lto = "thin"
+codegen-units = 1
+
+# BEGIN shared lints: generated from /lints.toml by `just sync-lints`. Do not edit.
 [lints.rust]
 unsafe_code = "deny"
 missing_debug_implementations = "warn"
@@ -15,8 +24,27 @@ missing_debug_implementations = "warn"
 [lints.clippy]
 all = { level = "warn", priority = -1 }
 pedantic = { level = "warn", priority = -1 }
-module_name_repetitions = "allow"
 missing_errors_doc = "allow"
-unwrap_used = "warn"
-dbg_macro = "warn"
-todo = "warn"
+# Shipped code never panics: return Result/Option instead.
+unwrap_used = "deny"
+expect_used = "deny"
+panic = "deny"
+todo = "deny"
+unimplemented = "deny"
+unreachable = "deny"
+exit = "deny"
+mem_forget = "deny"
+# Diagnostics go through tracing; a CLI's real output goes through one module with an #[expect].
+dbg_macro = "deny"
+print_stdout = "deny"
+print_stderr = "deny"
+# Structure.
+cognitive_complexity = "deny"
+too_many_arguments = "deny"
+wildcard_imports = "deny"
+# Every unsafe block says why it is sound.
+undocumented_unsafe_blocks = "deny"
+# Suppressions are #[expect] with a reason, so stale ones fail the build.
+allow_attributes = "deny"
+allow_attributes_without_reason = "deny"
+# END shared lints
