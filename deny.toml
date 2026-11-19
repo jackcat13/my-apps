@@ -1,0 +1,52 @@
+# cargo-deny config shared by every project: `scripts/check.sh` passes it with --config.
+# Every exception says why, and when to revisit it.
+
+[graph]
+all-features = true
+
+[advisories]
+version = 2
+yanked = "deny"
+# Format: { id = "RUSTSEC-YYYY-NNNN", reason = "why it doesn't apply; revisit when …" }
+ignore = []
+
+[licenses]
+version = 2
+confidence-threshold = 0.9
+# Permissive licences only. Adding one is a repo-wide decision: propose it, don't just add it.
+allow = [
+    "MIT",
+    "MIT-0",
+    "Apache-2.0",
+    "Apache-2.0 WITH LLVM-exception",
+    "BSD-2-Clause",
+    "BSD-3-Clause",
+    "ISC",
+    "Zlib",
+    "Unicode-3.0",
+    "BSL-1.0",
+    "CC0-1.0",
+]
+
+[licenses.private]
+# Our own projects are `publish = false` and carry no licence field.
+ignore = true
+
+[bans]
+multiple-versions = "warn"
+wildcards = "deny"
+allow-wildcard-paths = true
+# Crates that docs/stack.md replaces. An app that truly needs one (often as a transitive
+# dependency) adds it to `wrappers` or `skip` *here*, with a reason, after asking.
+deny = [
+    { crate = "chrono", reason = "use jiff (docs/stack.md)" },
+    { crate = "openssl", reason = "use rustls (docs/stack.md)" },
+    { crate = "openssl-sys", reason = "use rustls (docs/stack.md)" },
+    { crate = "native-tls", reason = "use rustls (docs/stack.md)" },
+]
+
+[sources]
+unknown-registry = "deny"
+unknown-git = "deny"
+allow-registry = ["https://github.com/rust-lang/crates.io-index"]
+allow-git = []

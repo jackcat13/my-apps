@@ -1,0 +1,19 @@
+# Weekly, grouped dependency updates. Cargo: one PR per project, all crates grouped.
+version: 2
+updates:
+  - package-ecosystem: cargo
+    directories:
+      - "/apps/*"
+      - "/crates/*"
+    schedule:
+      interval: weekly
+    groups:
+      cargo:
+        patterns: ["*"]
+  - package-ecosystem: github-actions
+    directory: "/"
+    schedule:
+      interval: weekly
+    groups:
+      actions:
+        patterns: ["*"]
