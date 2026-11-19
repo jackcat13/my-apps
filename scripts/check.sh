@@ -90,7 +90,7 @@ lockfile_unchanged() {
   step "tests + coverage (floor: ${coverage_min}% lines)" coverage
   step "doctests" doctests
   step "docs" env RUSTDOCFLAGS="-D warnings" cargo doc --locked --no-deps $FEATURE_FLAGS
-  step "cargo-deny" cargo deny --all-features check --config "$root/deny.toml"
+  step "cargo-deny" cargo deny --all-features --config "$root/deny.toml" check
   step "unused dependencies" cargo machete
   step "layering" "$root/scripts/check-layering.sh" "$project"
   step "Cargo.lock unchanged" lockfile_unchanged

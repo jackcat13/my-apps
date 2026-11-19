@@ -35,7 +35,7 @@ jobs:
           failed=0
           for p in $(ALL=1 FORMAT=lines scripts/changed-projects.sh); do
             echo "==> $p"
-            (cd "$p" && cargo deny --all-features check --config "$GITHUB_WORKSPACE/deny.toml") || failed=1
+            (cd "$p" && cargo deny --all-features --config "$GITHUB_WORKSPACE/deny.toml" check) || failed=1
           done
           exit "$failed"
 
