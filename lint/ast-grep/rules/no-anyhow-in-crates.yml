@@ -15,6 +15,10 @@ rule:
       has:
         field: path
         regex: ^anyhow$
+    - kind: scoped_type_identifier
+      has:
+        field: path
+        regex: ^anyhow$
     - kind: scoped_use_list
       has:
         field: path
