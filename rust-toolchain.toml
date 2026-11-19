@@ -1,7 +1,9 @@
-# Default toolchain for every project (rustup searches parent directories).
+# Pinned toolchain for every project (rustup searches parent directories). To bump: change
+# `channel`, set the same major.minor as `rust-version` in every Cargo.toml (`just check-repo`
+# verifies it), fix new lints, one PR.
 # A project needing something else (nightly, extra targets) adds its own rust-toolchain.toml
 # and documents why in its AGENTS.md.
 [toolchain]
-channel = "stable"
-components = ["rustfmt", "clippy"]
+channel = "1.100.0"
+components = ["rustfmt", "clippy", "llvm-tools"]
 profile = "minimal"

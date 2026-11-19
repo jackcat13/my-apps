@@ -1,0 +1,18 @@
+# Every tool the checks use, pinned. CI installs <name>@<version> (taiki-e/install-action);
+# `just setup` installs them locally from the third column. Bump versions here only.
+# name          version   local install
+just            1.59.0    binstall:just
+cargo-deny      0.21.0    binstall:cargo-deny
+cargo-nextest   0.9.152   binstall:cargo-nextest
+cargo-llvm-cov  0.9.1     binstall:cargo-llvm-cov
+cargo-machete   0.10.1    binstall:cargo-machete
+cargo-hack      0.6.46    binstall:cargo-hack
+cargo-generate  0.26.0    binstall:cargo-generate
+ast-grep        0.51.3    binstall:ast-grep
+typos           1.52.2    binstall:typos-cli
+taplo           0.10.0    binstall:taplo-cli
+zizmor          1.32.0    binstall:zizmor
+actionlint      1.7.12    brew:actionlint
+shellcheck      0.11.0    brew:shellcheck
+cargo-mutants   27.1.0    binstall:cargo-mutants
+cargo-fuzz      0.13.2    binstall:cargo-fuzz
