@@ -6,6 +6,7 @@
 set -euo pipefail
 cd "$(git rev-parse --show-toplevel)"
 
+# shellcheck disable=SC2016 # backticks are literal text in the marker, not a command
 begin='# BEGIN shared lints: generated from /lints.toml by `just sync-lints`. Do not edit.'
 end='# END shared lints'
 check=0

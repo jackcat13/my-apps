@@ -1,3 +1,4 @@
+# shellcheck shell=bash
 # Shared helpers, sourced by the other scripts.
 
 repo_root() { git rev-parse --show-toplevel; }
