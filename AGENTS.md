@@ -64,4 +64,4 @@ One row per project. Kind: `cli`, `web`, `gui`, `wasm`, `embedded`, `game`, `lib
 
 | Name | Path | Kind | Purpose |
 |---|---|---|---|
-| _none yet_ | | | |
+| life-dashboard | apps/life-dashboard | gui | Personal finance/stats dashboard |
