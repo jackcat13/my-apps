@@ -89,12 +89,15 @@ fn show_form(screen: &mut SettingsScreen, ui: &mut egui::Ui, handle: &Handle) {
                 for known in ConnectorType::KNOWN {
                     if ui
                         .selectable_label(selected == *known, known.label())
+                        .on_hover_text(known.setup_help())
                         .clicked()
                     {
                         known.as_str().clone_into(&mut screen.form.connector_type);
                     }
                 }
-            });
+            })
+            .response
+            .on_hover_text(selected.setup_help());
     });
     ui.horizontal(|ui| {
         ui.label("Credentials");
