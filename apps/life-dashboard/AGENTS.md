@@ -52,12 +52,25 @@ a new snapshot (`db::snapshots`, append-only total value) and any new transactio
 returns before touching any of that, so previously persisted data is untouched; the UI shows the
 error as a dismissible banner next to the connection, not a crash.
 
-`connectors::interactive_brokers::InteractiveBrokersConnector` is the first (and so far only)
-connector: it talks to the user's locally running IBKR Client Portal Gateway over plain HTTPS
-(`GET /portfolio/accounts`, `/portfolio/{id}/positions/0`, `/iserver/account/trades`). The gateway
-handles authentication itself via the user's browser session, so the connection's `credentials`
-field just holds the gateway's base URL (e.g. `https://localhost:5000/v1/api`), not a secret. The
-aggregator-tier and CSV connectors planned next implement the same `connectors::Connector` trait.
+`connectors::interactive_brokers::InteractiveBrokersConnector` talks to the user's locally
+running IBKR Client Portal Gateway over plain HTTPS (`GET /portfolio/accounts`,
+`/portfolio/{id}/positions/0`, `/iserver/account/trades`). The gateway handles authentication
+itself via the user's browser session, so the connection's `credentials` field just holds the
+gateway's base URL (e.g. `https://localhost:5000/v1/api`), not a secret.
+
+`connectors::powens::PowensConnector` is the aggregator-tier connector: it talks to a Powens
+(formerly Budget Insight/Budgea) open-banking account — the Bridge/Powens/TrueLayer-class PSD2
+aggregator this app uses for banks without their own personal API — via `GET
+/users/me/accounts` and `/users/me/accounts/{id}/transactions`, with `credentials` holding JSON
+(`base_url`, `access_token`, optional `connection_id`). Since a Powens user can have several
+banks linked, the same connector type is reused across institutions by creating one app
+connection per bank, each scoped by its own `connection_id`: this covers La Banque Postale, and
+Revolut (whose AIS consent only grants a 5-minute access window per re-consent, so expect
+frequent re-auth). UBS is not wired to any connector: its multibanking route, SIX bLink, is
+Switzerland-only, launched 2025-11-25, and not available through EU PSD2 aggregators — it falls
+back to the CSV connector instead.
+
+The CSV connector planned next implements the same `connectors::Connector` trait.
 
 ## Commands
 

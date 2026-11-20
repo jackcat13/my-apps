@@ -92,10 +92,17 @@ fn show_form(screen: &mut SettingsScreen, ui: &mut egui::Ui, handle: &Handle) {
                         .on_hover_text(known.setup_help())
                         .clicked()
                     {
+                        // Swap in the new type's prefilled template as long as the field still
+                        // holds nothing but the *previous* type's own prefill (empty, or an
+                        // untouched default) — so switching types while setting up a new
+                        // connection always shows the right template, but editing an existing
+                        // connection's real credentials and then changing its type doesn't
+                        // silently wipe them.
+                        let still_just_a_prefill = screen.form.credentials.is_empty()
+                            || Some(screen.form.credentials.as_str())
+                                == selected.default_credentials();
                         known.as_str().clone_into(&mut screen.form.connector_type);
-                        if screen.form.credentials.is_empty()
-                            && let Some(default) = known.default_credentials()
-                        {
+                        if still_just_a_prefill && let Some(default) = known.default_credentials() {
                             default.clone_into(&mut screen.form.credentials);
                         }
                     }
@@ -105,11 +112,29 @@ fn show_form(screen: &mut SettingsScreen, ui: &mut egui::Ui, handle: &Handle) {
             .on_hover_text(selected.setup_help());
         ui.label("ⓘ").on_hover_text(selected.setup_help());
     });
+    let secret = ConnectorType::parse(&screen.form.connector_type).credentials_are_secret();
     ui.horizontal(|ui| {
         ui.label("Credentials");
-        let mask = ConnectorType::parse(&screen.form.connector_type).credentials_are_secret();
-        ui.add(egui::TextEdit::singleline(&mut screen.form.credentials).password(mask));
+        if secret {
+            let label = if screen.form.show_credentials {
+                "Hide"
+            } else {
+                "Show"
+            };
+            if ui.button(label).clicked() {
+                screen.form.show_credentials = !screen.form.show_credentials;
+            }
+        }
     });
+    // A textarea, not a single-line field: some connectors' credentials (e.g. Powens' JSON
+    // blob of base_url/access_token/connection_id) are too long to read or edit comfortably
+    // in one line.
+    ui.add(
+        egui::TextEdit::multiline(&mut screen.form.credentials)
+            .password(secret && !screen.form.show_credentials)
+            .desired_rows(3)
+            .desired_width(f32::INFINITY),
+    );
 
     ui.horizontal(|ui| {
         let can_save =

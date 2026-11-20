@@ -1,9 +1,11 @@
 //! The connector contract: what it takes to fetch an institution's current accounts,
 //! positions and recent transactions, and have them normalized into a shape [`crate::sync`]
-//! can persist. [`interactive_brokers`] is the first (and so far only) implementation; the
-//! aggregator-tier and CSV connectors planned next follow the same shape.
+//! can persist. [`interactive_brokers`] talks directly to a brokerage's own API; [`powens`] is
+//! the aggregator-tier connector, talking to an open-banking aggregator on behalf of banks
+//! that don't offer one. The CSV connector planned next follows the same shape.
 
 pub mod interactive_brokers;
+pub mod powens;
 
 use jiff::Timestamp;
 
@@ -16,6 +18,8 @@ use crate::db::connections::Connection;
 pub enum ConnectorType {
     /// `interactive_brokers::InteractiveBrokersConnector`.
     InteractiveBrokers,
+    /// `powens::PowensConnector`.
+    Powens,
     /// A `connector_type` value that doesn't match any known connector.
     Unknown(String),
 }
@@ -24,12 +28,13 @@ impl ConnectorType {
     /// Every connector this app implements, for populating a selection list. Does not include
     /// [`Self::Unknown`], which only arises from parsing a string that doesn't match one of
     /// these.
-    pub const KNOWN: &'static [ConnectorType] = &[Self::InteractiveBrokers];
+    pub const KNOWN: &'static [ConnectorType] = &[Self::InteractiveBrokers, Self::Powens];
 
     /// Parses a connection's `connector_type` field.
     pub fn parse(raw: &str) -> Self {
         match raw {
             "interactive-brokers" => Self::InteractiveBrokers,
+            "powens" => Self::Powens,
             other => Self::Unknown(other.to_owned()),
         }
     }
@@ -39,6 +44,7 @@ impl ConnectorType {
     pub fn as_str(&self) -> &str {
         match self {
             Self::InteractiveBrokers => "interactive-brokers",
+            Self::Powens => "powens",
             Self::Unknown(raw) => raw,
         }
     }
@@ -47,6 +53,7 @@ impl ConnectorType {
     pub fn label(&self) -> &str {
         match self {
             Self::InteractiveBrokers => "Interactive Brokers",
+            Self::Powens => "Open banking aggregator (Powens)",
             Self::Unknown(raw) => raw,
         }
     }
@@ -58,9 +65,10 @@ impl ConnectorType {
     pub fn credentials_are_secret(&self) -> bool {
         match self {
             Self::InteractiveBrokers => false,
-            // Unknown to this app (either not implemented yet, or a typo) — assume the
-            // worst and mask it, rather than risk showing a real secret in the clear.
-            Self::Unknown(_) => true,
+            // Powens: holds the user's access token, a real bearer credential. Unknown to
+            // this app (either not implemented yet, or a typo): assume the worst and mask it,
+            // rather than risk showing a real secret in the clear.
+            Self::Powens | Self::Unknown(_) => true,
         }
     }
 
@@ -73,6 +81,18 @@ impl ConnectorType {
                  your browser. Enter its base URL as the credentials, e.g. \
                  https://localhost:5000/v1/api"
             }
+            Self::Powens => {
+                "Requires a Powens (or Powens-compatible, e.g. Budget Insight) open-banking \
+                 account with a bank already linked through its webview. Enter credentials as \
+                 JSON: {\"base_url\":\"https://your-domain.biapi.pro/2.0\",\"access_token\":\
+                 \"...\",\"connection_id\":123}. `connection_id` scopes to one linked bank \
+                 (omit to pull every linked bank); create one connection per bank — e.g. La \
+                 Banque Postale and Revolut — reusing this same connector type. Revolut allows \
+                 AIS access for only 5 minutes after each consent, so expect frequent \
+                 401s until the user re-consents. UBS isn't supported here: its multibanking \
+                 route is SIX bLink (Swiss-only, launched 2025-11-25), not available through \
+                 EU PSD2 aggregators — use the CSV connector for UBS instead."
+            }
             Self::Unknown(_) => "Not a connector this app implements yet.",
         }
     }
@@ -83,6 +103,12 @@ impl ConnectorType {
     pub fn default_credentials(&self) -> Option<&str> {
         match self {
             Self::InteractiveBrokers => Some("https://localhost:5000/v1/api"),
+            // Not a real secret — a template showing the expected JSON shape (every key this
+            // connector reads, `connection_id` included so it's obvious it's there to fill
+            // in, not a field to add later), same spirit as IBKR's prefilled gateway URL.
+            Self::Powens => Some(
+                r#"{"base_url":"https://your-domain.biapi.pro/2.0","access_token":"","connection_id":null}"#,
+            ),
             Self::Unknown(_) => None,
         }
     }
@@ -207,5 +233,15 @@ mod tests {
     #[test]
     fn an_unknown_connector_type_is_treated_as_having_secret_credentials() {
         assert!(ConnectorType::Unknown("mystery-broker".to_owned()).credentials_are_secret());
+    }
+
+    #[test]
+    fn parses_powens() {
+        assert_eq!(ConnectorType::parse("powens"), ConnectorType::Powens);
+    }
+
+    #[test]
+    fn powens_credentials_are_secret() {
+        assert!(ConnectorType::Powens.credentials_are_secret());
     }
 }
