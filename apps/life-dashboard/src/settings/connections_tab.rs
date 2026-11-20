@@ -112,11 +112,29 @@ fn show_form(screen: &mut SettingsScreen, ui: &mut egui::Ui, handle: &Handle) {
             .on_hover_text(selected.setup_help());
         ui.label("ⓘ").on_hover_text(selected.setup_help());
     });
+    let secret = ConnectorType::parse(&screen.form.connector_type).credentials_are_secret();
     ui.horizontal(|ui| {
         ui.label("Credentials");
-        let mask = ConnectorType::parse(&screen.form.connector_type).credentials_are_secret();
-        ui.add(egui::TextEdit::singleline(&mut screen.form.credentials).password(mask));
+        if secret {
+            let label = if screen.form.show_credentials {
+                "Hide"
+            } else {
+                "Show"
+            };
+            if ui.button(label).clicked() {
+                screen.form.show_credentials = !screen.form.show_credentials;
+            }
+        }
     });
+    // A textarea, not a single-line field: some connectors' credentials (e.g. Powens' JSON
+    // blob of base_url/access_token/connection_id) are too long to read or edit comfortably
+    // in one line.
+    ui.add(
+        egui::TextEdit::multiline(&mut screen.form.credentials)
+            .password(secret && !screen.form.show_credentials)
+            .desired_rows(3)
+            .desired_width(f32::INFINITY),
+    );
 
     ui.horizontal(|ui| {
         let can_save =

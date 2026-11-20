@@ -36,6 +36,11 @@ struct ConnectionForm {
     name: String,
     connector_type: String,
     credentials: String,
+    /// Whether the Credentials field should render as plain text instead of masked. Starts
+    /// (and resets to) `false` — hidden by default is the safe choice for a real secret — but
+    /// a mixed-content value like Powens' JSON template is unreadable fully masked, so the
+    /// Connections tab offers a toggle to reveal it while editing.
+    show_credentials: bool,
 }
 
 impl Default for ConnectionForm {
@@ -49,6 +54,7 @@ impl Default for ConnectionForm {
                 .default_credentials()
                 .unwrap_or_default()
                 .to_owned(),
+            show_credentials: false,
         }
     }
 }
@@ -63,6 +69,7 @@ impl ConnectionForm {
         self.name.clone_from(&connection.name);
         self.connector_type.clone_from(&connection.connector_type);
         self.credentials.clone_from(&connection.credentials);
+        self.show_credentials = false;
     }
 
     fn as_draft(&self) -> connections::ConnectionDraft {
