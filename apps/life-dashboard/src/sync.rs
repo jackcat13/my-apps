@@ -10,6 +10,7 @@ use jiff::Timestamp;
 use sqlx::{Sqlite, SqlitePool, Transaction};
 
 use crate::connectors::interactive_brokers::InteractiveBrokersConnector;
+use crate::connectors::powens::PowensConnector;
 use crate::connectors::{Connector, ConnectorError, ConnectorType, FetchedAccount};
 use crate::db::connections::Connection;
 use crate::db::{DbError, accounts, connections, positions, snapshots, transactions};
@@ -44,6 +45,7 @@ pub async fn refresh_connection(
                 .fetch(client, connection)
                 .await?
         }
+        ConnectorType::Powens => PowensConnector.fetch(client, connection).await?,
         ConnectorType::Unknown(connector_type) => {
             return Err(SyncError::UnknownConnector { connector_type });
         }
