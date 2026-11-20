@@ -92,10 +92,17 @@ fn show_form(screen: &mut SettingsScreen, ui: &mut egui::Ui, handle: &Handle) {
                         .on_hover_text(known.setup_help())
                         .clicked()
                     {
+                        // Swap in the new type's prefilled template as long as the field still
+                        // holds nothing but the *previous* type's own prefill (empty, or an
+                        // untouched default) — so switching types while setting up a new
+                        // connection always shows the right template, but editing an existing
+                        // connection's real credentials and then changing its type doesn't
+                        // silently wipe them.
+                        let still_just_a_prefill = screen.form.credentials.is_empty()
+                            || Some(screen.form.credentials.as_str())
+                                == selected.default_credentials();
                         known.as_str().clone_into(&mut screen.form.connector_type);
-                        if screen.form.credentials.is_empty()
-                            && let Some(default) = known.default_credentials()
-                        {
+                        if still_just_a_prefill && let Some(default) = known.default_credentials() {
                             default.clone_into(&mut screen.form.credentials);
                         }
                     }

@@ -103,11 +103,12 @@ impl ConnectorType {
     pub fn default_credentials(&self) -> Option<&str> {
         match self {
             Self::InteractiveBrokers => Some("https://localhost:5000/v1/api"),
-            // Not a real secret — a template showing the expected JSON shape, same spirit as
-            // IBKR's prefilled gateway URL.
-            Self::Powens => {
-                Some(r#"{"base_url":"https://your-domain.biapi.pro/2.0","access_token":""}"#)
-            }
+            // Not a real secret — a template showing the expected JSON shape (every key this
+            // connector reads, `connection_id` included so it's obvious it's there to fill
+            // in, not a field to add later), same spirit as IBKR's prefilled gateway URL.
+            Self::Powens => Some(
+                r#"{"base_url":"https://your-domain.biapi.pro/2.0","access_token":"","connection_id":null}"#,
+            ),
             Self::Unknown(_) => None,
         }
     }
